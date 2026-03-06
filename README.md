@@ -16,4 +16,4 @@
 * `04_Analysis_Modules/`: 空间隔离系综平均与 MSD 标度律分析工具。
 
 ## 作者
-Wang Beiyan (Space Science and Technology, Xidian University)
+Wang Beiyan (信息力学与感知工程学院, Xidian University)
