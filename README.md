@@ -186,22 +186,3 @@ git commit -m "resolve: merge conflicts with main"
 
 Wang Beiyan  
 信息力学与感知工程学院，西安电子科技大学
-
-
-## 11. 最终推送前检查清单（建议）
-
-```bash
-git fetch --all --prune
-git status --short
-python 05_Utils_and_Tests/check_optimization_requirements.py
-rg -n "^(<<<<<<< |=======|>>>>>>> )" README.md 05_Utils_and_Tests/Optimization_Implementation_Audit.md 05_Utils_and_Tests/check_optimization_requirements.py
-git push origin <your-branch>
-```
-
-- 若 `push` 被拒绝且你确认要覆盖远端同名分支，使用：
-  - `git push --force-with-lease origin <your-branch>`
-- 推送成功后到 PR 页面确认：
-  - `Checks` 通过
-  - 冲突提示消失
-
----
