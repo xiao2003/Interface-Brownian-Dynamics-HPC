@@ -156,6 +156,31 @@ python 05_Utils_and_Tests/check_optimization_requirements.py
 
 ---
 
+
+## 10. 分支冲突处理建议（与 main 合并时）
+
+若 GitHub 提示以下文件有冲突：
+
+- `README.md`
+- `05_Utils_and_Tests/Optimization_Implementation_Audit.md`
+- `05_Utils_and_Tests/check_optimization_requirements.py`
+
+建议使用命令行流程：
+
+```bash
+git fetch origin
+git merge origin/main
+# 手工编辑冲突文件，删除 <<<<<<< ======= >>>>>>> 标记
+python 05_Utils_and_Tests/check_optimization_requirements.py
+rg -n "^(<<<<<<< |=======|>>>>>>> )" README.md 05_Utils_and_Tests/Optimization_Implementation_Audit.md 05_Utils_and_Tests/check_optimization_requirements.py
+git add README.md 05_Utils_and_Tests/Optimization_Implementation_Audit.md 05_Utils_and_Tests/check_optimization_requirements.py
+git commit -m "resolve: merge conflicts with main"
+```
+
+> 说明：本仓库检查脚本已包含冲突标记扫描规则，可在提交前自动拦截冲突残留。
+
+---
+
 ## 9. 作者
 
 Wang Beiyan  

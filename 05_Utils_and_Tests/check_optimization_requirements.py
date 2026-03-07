@@ -29,6 +29,8 @@ files = {
     'dist_uni': ROOT / '03_Distributions' / 'Sub_GenerateUniformWithMean.m',
     'track': ROOT / '04_Analysis_Modules' / 'track.m',
     'merge': ROOT / '04_Analysis_Modules' / 'Sub_MergingLocalizationsInSameFrame.m',
+    'audit': ROOT / '05_Utils_and_Tests' / 'Optimization_Implementation_Audit.md',
+    'checker': ROOT / '05_Utils_and_Tests' / 'check_optimization_requirements.py',
 }
 
 text = {k: p.read_text(encoding='utf-8') for k,p in files.items()}
@@ -95,6 +97,7 @@ checks = [
     ("R30.batch-artifacts-defined", "Batch_Metadata.mat" in text['main'] and "TaskManifest.csv" in text['main'] and "TempTasks" in text['main']),
     ("R31.no-merge-conflict-markers-main", re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['main'], re.M) is None),
     ("R32.no-merge-conflict-markers-core", re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['mex'], re.M) is None and re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['analysis'], re.M) is None and re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['readme'], re.M) is None),
+    ("R33.no-merge-conflict-markers-utils", re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['audit'], re.M) is None and re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['checker'], re.M) is None),
 ]
 
 failed = []

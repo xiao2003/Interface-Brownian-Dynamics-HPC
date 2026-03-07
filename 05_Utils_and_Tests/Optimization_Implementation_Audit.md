@@ -1,7 +1,7 @@
-# 优化算法实现审计（第十七轮：7 项要求 + 分支冲突防护检查）
+# 优化算法实现审计（第十八轮：7 项要求 + 冲突文件闭环核验）
 
 > 审计范围：`01_Main/CCCPU.m`、`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_mex.m`、`04_Analysis_Modules/*`、`03_Distributions/*`、`README.md`。
-> 结论：7 项优化持续满足；并通过“初始功能回归”静态核验（52/52）。
+> 结论：7 项优化持续满足；并通过“初始功能回归”静态核验（53/53）。
 
 ---
 
@@ -74,8 +74,8 @@
 ## 自动复核脚本（持续增强）
 
 - 脚本：`05_Utils_and_Tests/check_optimization_requirements.py`
-- 当前检查项：52 条（含初始提交对照、IID/异步/偏移顺序一致性、批次产物完整性与冲突标记防护检查）。
-- 当前结果：`pass=52, fail=0`。
+- 当前检查项：53 条（含初始提交对照、IID/异步/偏移顺序一致性、批次产物完整性与冲突标记防护检查）。
+- 当前结果：`pass=53, fail=0`。
 
 
 ## 与初始代码对照（新增）
@@ -108,3 +108,9 @@
 - 冲突标记防护：在 `01_Main/CCCPU.m` 中检查是否残留 `<<<<<<< / ======= / >>>>>>>` 三类 merge 冲突标记。
 - 核心模块防护：在 `Sub_JumpingBetweenEachFrame_mex.m`、`Sub_TrajectoryAnalysis.m` 与 `README.md` 中执行同类冲突标记扫描。
 - 目的：在与 `main` 合并时，避免“看似可运行但残留冲突标记”导致的隐性错误进入分支。
+
+
+## 本轮新增静态核验点（R33）
+
+- 工具文件冲突闭环：对 `05_Utils_and_Tests/Optimization_Implementation_Audit.md` 与 `05_Utils_and_Tests/check_optimization_requirements.py` 追加冲突标记扫描。
+- 目的：覆盖本次冲突清单中的工具文件，防止审计文档/检查脚本本身残留 `<<<<<<< / ======= / >>>>>>>`。
