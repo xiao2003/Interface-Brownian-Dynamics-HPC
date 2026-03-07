@@ -1,7 +1,7 @@
-# 优化算法实现审计（第十六轮：7 项要求 + 初始对照深化审计）
+# 优化算法实现审计（第十七轮：7 项要求 + 分支冲突防护检查）
 
 > 审计范围：`01_Main/CCCPU.m`、`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_mex.m`、`04_Analysis_Modules/*`、`03_Distributions/*`、`README.md`。
-> 结论：7 项优化持续满足；并通过“初始功能回归”静态核验（50/50）。
+> 结论：7 项优化持续满足；并通过“初始功能回归”静态核验（52/52）。
 
 ---
 
@@ -74,8 +74,8 @@
 ## 自动复核脚本（持续增强）
 
 - 脚本：`05_Utils_and_Tests/check_optimization_requirements.py`
-- 当前检查项：50 条（含初始提交对照、IID/异步/偏移顺序一致性、批次产物完整性检查）。
-- 当前结果：`pass=50, fail=0`。
+- 当前检查项：52 条（含初始提交对照、IID/异步/偏移顺序一致性、批次产物完整性与冲突标记防护检查）。
+- 当前结果：`pass=52, fail=0`。
 
 
 ## 与初始代码对照（新增）
@@ -101,3 +101,10 @@
 - 超大跳跃守卫：确认 `DL_flat > 1e8` 的异常提示逻辑仍存在。
 - 异步完成屏障顺序：确认 `SavedTaskCount` 等待循环在分组分析前执行。
 - 批次收纳完整性：确认 `Batch_Metadata.mat`、`TaskManifest.csv`、`TempTasks` 三类批次产物定义保留。
+
+
+## 本轮新增静态核验点（R31~R32）
+
+- 冲突标记防护：在 `01_Main/CCCPU.m` 中检查是否残留 `<<<<<<< / ======= / >>>>>>>` 三类 merge 冲突标记。
+- 核心模块防护：在 `Sub_JumpingBetweenEachFrame_mex.m`、`Sub_TrajectoryAnalysis.m` 与 `README.md` 中执行同类冲突标记扫描。
+- 目的：在与 `main` 合并时，避免“看似可运行但残留冲突标记”导致的隐性错误进入分支。

@@ -93,6 +93,8 @@ checks = [
     ("R28.large-jump-warning-threshold", "超大跳跃(>1e8 nm)" in text['analysis'] and "DL_flat > 1e8" in text['analysis']),
     ("R29.async-barrier-before-analysis", text['main'].find("while getappdata(0, 'SavedTaskCount') < TotalTasks") < text['main'].find("for g = 1:numGroups")),
     ("R30.batch-artifacts-defined", "Batch_Metadata.mat" in text['main'] and "TaskManifest.csv" in text['main'] and "TempTasks" in text['main']),
+    ("R31.no-merge-conflict-markers-main", re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['main'], re.M) is None),
+    ("R32.no-merge-conflict-markers-core", re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['mex'], re.M) is None and re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['analysis'], re.M) is None and re.search(r"^<<<<<<< |^=======$|^>>>>>>> ", text['readme'], re.M) is None),
 ]
 
 failed = []
