@@ -1,4 +1,4 @@
-function [SD,DX,DY,DL] = Sub_TrajectoryAnalysis(PL,DTRACK,FigN,Dt, DataTrans)
+function [SD,DX,DY,DL] = Sub_TrajectoryAnalysis(PL,DTRACK,FigN,Dt, DataTrans, BatchRoot)
 %UNTITLED 此处显示有关此函数的摘要
 % DTRACK: the maximum tracking length: nm
 
@@ -10,15 +10,32 @@ k = DataTrans(5);          % Molecular jumping distance at a given diffusion coe
 jf = DataTrans(6);         % Jumping frequency
 adR = DataTrans(7);        % Adsorption radius
 Fig = DataTrans(8);        % Figure Number
-jj = DataTrans(9);         % The jjth frame   
+jj = DataTrans(9);         % The jjth frame
 xshiftvelocity = DataTrans(10);    % Shift Velocity in x axis : nm/s
 yshiftvelocity = DataTrans(11);    % Shift Velocity in y axis : nm/s
 DistributionMode = DataTrans(12);
 RepeatID = DataTrans(13);
+if nargin < 6 || isempty(BatchRoot)
+    BatchRoot = pwd;
+end
 FN ={};         % Saving file name
 Lmin = 100;     % jumping length above which the jumping is counted: nm
 LinearT = 5;  % Linear fitting to find MSD: s
 fontsize = 14;
+
+% Spatial Offset Stacking: 若输入含第4列 Repeat 标签，则在分析模块内执行 1e9 nm 偏移
+if size(PL,2) >= 4
+    rep_tags = PL(:,4);
+    unique_reps = unique(rep_tags(:))';
+    for ridx = 1:length(unique_reps)
+        r = unique_reps(ridx);
+        shift_nm = (ridx - 1) * 1e9;
+        row_idx = (rep_tags == r);
+        PL(row_idx,1) = PL(row_idx,1) + shift_nm;
+        PL(row_idx,2) = PL(row_idx,2) + shift_nm;
+    end
+    PL = PL(:,1:3);
+end
 
 [positionlist] = Sub_MergingLocalizationsInSameFrame(PL);
 [m,n] = find(positionlist(:,3)==0);
@@ -127,6 +144,16 @@ DX(DX==0)=NaN;
 DY(DY==0)=NaN;
 MAX(MAX==0)=NaN;
 
+% 防串轨诊断：若出现接近空间偏移量(1e9 nm)的异常步长，输出告警
+DL_flat = DL(:);
+DL_flat = DL_flat(~isnan(DL_flat));
+if ~isempty(DL_flat)
+    suspicious = sum(DL_flat > 1e8);
+    if suspicious > 0
+        fprintf('[WARN] 检测到 %d 个超大跳跃(>1e8 nm)，请检查重复轨迹拼接是否发生跨轨迹误连。\n', suspicious);
+    end
+end
+
 %% Displacement distributions in x and y
 figure(1+FigN);
 subplot(121)
@@ -199,7 +226,7 @@ legend('Location', 'best', 'FontSize', fontsize-1);
 
 hold off;
 
-% 
+%
 % figure(3+FigN)
 % hold on
 % plot(d,j/max(j),'.', 'MarkerSize', 20)
@@ -234,7 +261,7 @@ box on
 set(gca,'FontSize',fontsize);
 set(gca,'YScale','log');
 f1=figure(4+FigN);
-% 
+%
 % [nbr_jumps,t_ads] = Sub_JumpingAnalysis(DL,N_MSD_MAX,Lmin);
 % figure(5+FigN)
 % subplot(121)
@@ -255,7 +282,7 @@ f1=figure(4+FigN);
 % set(gca,'FontSize',fontsize);
 % set(gca,'YScale','log');
 % title(strcat('\Delta L > ',num2str(Lmin),'nm'))
-% 
+%
 % f2=figure(5+FigN);      % adjusting the figure size
 % f2.Position(3)=2*f1.Position(3);
 %% Mean Square Displacement
@@ -289,7 +316,7 @@ end
 
 %%  Linear fit to MSD_TA
 
-disp('Linear fit to MSD_TA') 
+disp('Linear fit to MSD_TA')
 [xSort1, xIdx1] = sort(X_time);
 ySort1 = MSD_TA(xIdx1);
 [Ps1,Ns1] = min(abs(X_time-LinearT));
@@ -303,9 +330,9 @@ box on
 set(gca,'FontSize',fontsize);
 
 
-% 
+%
 % %% Distribution of trajectories
-% 
+%
 % figure(5+FigN)
 % hold on
 % [h,c] = hist(Size,max(Size));
@@ -318,7 +345,7 @@ set(gca,'FontSize',fontsize);
 % set(gca,'FontSize',fontsize);
 
 coco = flag(6);
-% 
+%
 % for i=1:10
 %     disp('###################Please give a proper cut-off length for the jumping:     #################')
 %     DTRACKK=input('The maximum jumping length considered (nm), input 0 if it is already well defined:  ')
@@ -330,22 +357,22 @@ coco = flag(6);
 %     % end
 %     DataTrans=[Gcutoff,DTRACKK,Dt,LinearT,FigN,fontsize,N_MSD_MAX];
 %     [DXX, DYY, DLL, px_total,py_total] = Sub_TrackingLengthTuned(positionlist,DataTrans,coco(i,:));
-% 
+%
 %     figure(3+FigN)
 %     set(gca,'YScale','log');
 %     axis([min(c) max(c) 0.0001 1])
 %     box on
 %     set(gca,'FontSize',fontsize);
 % end
-% 
-% 
-% 
+%
+%
+%
 % disp('###################Please give a proper cut-off length for the linear regime to find the diffusion coeffi.:     #################')
 % LinearT=input('T cut-off for the linear regime (s):  ')
-% 
+%
 % clf(FigN+6)
 % [Slope] = Sub_FindingMobilityLinearFitting(px_total,py_total,N_MSD_MAX,Dt,LinearT,FigN+6)
-% 
+%
 
 
 sprintf('Total frame processed: %.1f',t_T(end)-t_T(1)+1)
@@ -353,7 +380,7 @@ sprintf('Dt between each frame: %.1f ms',Dt*1000)
 sprintf('Total localizations: %.1f',length(px_T))
 sprintf('Total trajectories: %.1f',max(T_T))
 
-% 
+%
 % px_T = T(:,1);  % in nm
 % py_T = T(:,2);  % in nm
 % t_T = T(:,3);   % in frame
@@ -363,11 +390,11 @@ sprintf('Total trajectories: %.1f',max(T_T))
 
 % save(FN)
 
-% 
+%
 % S = input('Continue? Press any number to continue: ')
-% 
+%
 % close all
-% 
+%
 
 % 1. 准备分析结果数据结构
 % 创建结构体存储所有数据
@@ -383,7 +410,7 @@ result_data = zeros(size(T, 1), 5);  % 5列分析结果：MSD、DX、DY、Jump_L
 for i = 1:size(T, 1)
     traj_id = T(i, 4);  % 当前行的轨迹ID
     frame = T(i, 3);    % 当前行的帧号
-    
+
     % 填充分析结果（无效数据用NaN）
     if traj_id >= 1 && traj_id <= Number_TRACK && frame >= 1 && frame <= N_MSD_MAX
         result_data(i, 1) = MSD(traj_id, frame);       % MSD
@@ -407,15 +434,15 @@ switch DistributionMode
     case 1
         mat_filename = sprintf('幂律分布_Rep%d_%s模拟数据_模拟采样时长%.2f_模拟参数%.2f_平均吸附时间%.2fs_x方向上滑移速度%.2fnm_s_y方向上滑移速度%.2fnm_s.mat', ...
             RepeatID, time_str, t_tot, Timeindex, tm_ads, xshiftvelocity, yshiftvelocity);
-    case 2 
+    case 2
         mat_filename = sprintf('指数分布_Rep%d_%s模拟数据_模拟采样时长%.2f_平均吸附时间%.2fs_x方向上滑移速度%.2fnm_s_y方向上滑移速度%.2fnm_s.mat', ...
             RepeatID, time_str, t_tot,tm_ads, xshiftvelocity, yshiftvelocity);
     case 3
-        mat_filename = sprintf('均匀分布_Rep%d_%s模拟数据_模拟采样时长%2f_平均吸附时间%.2fs_x方向上滑移速度%.2fnm_s_y方向上滑移速度%.2fnm_s.mat', ...
-            RepeatID, t_tot,tm_ads, xshiftvelocity, yshiftvelocity);
+        mat_filename = sprintf('均匀分布_Rep%d_%s模拟数据_模拟采样时长%.2f_平均吸附时间%.2fs_x方向上滑移速度%.2fnm_s_y方向上滑移速度%.2fnm_s.mat', ...
+            RepeatID, time_str, t_tot, tm_ads, xshiftvelocity, yshiftvelocity);
 end
 % 添加：创建与MAT文件同名的文件夹（去除.mat后缀）
-folder_name = mat_filename(1:end-4);  % 提取MAT文件名作为文件夹名
+folder_name = fullfile(BatchRoot, mat_filename(1:end-4));  % 提取MAT文件名作为文件夹名
 if ~exist(folder_name, 'dir')         % 检查文件夹是否存在
     mkdir(folder_name);               % 不存在则创建
 end
@@ -447,13 +474,13 @@ for i = 1:length(fig_nums)
     fig_num = fig_nums(i);
     if ishandle(fig_num)  % 检查图表是否存在（避免报错）
         % 1. 生成 .fig 格式文件名（前缀+图表描述+.fig后缀）
-        fig_filename = sprintf('%s_%s.fig',fig_suffixes{i},img_prefix); 
+        fig_filename = sprintf('%s_%s.fig',fig_suffixes{i},img_prefix);
         fig_filepath = fullfile(folder_name, fig_filename);  % 路径指向新文件夹
-        
+
         % 2. 生成同名 .jpg 格式文件名（仅替换后缀）
         jpg_filename = strrep(fig_filename, '.fig', '.jpg');
         jpg_filepath = fullfile(folder_name, jpg_filename);
-        
+
         % 3. 保存为 MATLAB 原生 .fig 格式
         h_fig = figure(fig_num); % 获取真实的图窗对象句柄
         savefig(h_fig, fig_filepath); % 传入句柄进行保存
