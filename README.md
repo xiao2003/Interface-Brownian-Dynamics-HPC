@@ -157,7 +157,7 @@ python 05_Utils_and_Tests/check_optimization_requirements.py
 ---
 
 
-## 10. 分支冲突处理建议（与 main 合并时）
+## 9. 分支冲突处理建议（与 main 合并时）
 
 若 GitHub 提示以下文件有冲突：
 
@@ -169,6 +169,7 @@ python 05_Utils_and_Tests/check_optimization_requirements.py
 
 ```bash
 git fetch origin
+git status --short
 git merge origin/main
 # 手工编辑冲突文件，删除 <<<<<<< ======= >>>>>>> 标记
 python 05_Utils_and_Tests/check_optimization_requirements.py
@@ -181,7 +182,7 @@ git commit -m "resolve: merge conflicts with main"
 
 ---
 
-## 9. 作者
+## 10. 作者
 
 Wang Beiyan  
 信息力学与感知工程学院，西安电子科技大学
