@@ -1,0 +1,8 @@
+﻿Simulation_Results/
+Experiment_Logs/
+codegen/
+*.asv
+*.autosave
+*.fig
+*.mat
+*.mexw64.bak
