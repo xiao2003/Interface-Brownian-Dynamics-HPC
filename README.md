@@ -12,6 +12,12 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 
 ---
 
+## 架构展示图
+
+![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.png)
+
+---
+
 ## 1. 项目目标
 
 本项目关注的核心问题是：界面上的局部吸附、长尾停留和空间异质性，如何改变单分子的宏观输运统计行为。相比经典均匀布朗扩散模型，这类体系更容易出现：
