@@ -10,6 +10,12 @@
 
 Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建的 MATLAB 仿真项目。代码通过“缺陷吸附位点 + 停留时间分布 + 扩散 - 漂移耦合 + 轨迹统计分析”的建模方式，研究单分子在异质界面上的输运行为。当前仓库已经形成清晰的主程序、仿真引擎、分布采样和分析模块结构，适合作为论文研究、参数扫描和答辩展示的基础代码。
 
+## 最近整理
+
+- 清扫了仓库根目录的历史副本脚本，只保留分层目录中的正式版本
+- 将静态哈希查表版主程序与 MEX 入口合并回 `01_Main/` 和 `02_Simulation_Engine/`
+- 保持 `README` 与当前目录结构、执行流程和二进制接口一致
+
 ---
 
 ## 架构展示图
@@ -85,14 +91,14 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 
 ### 3.1 初始化并行环境
 
-程序启动时先关闭旧并行池，再重新建立本地并行池：
+程序启动时先关闭旧并行池，再根据任务总数动态建立本地并行池：
 
 ```matlab
-NumCores = min(10, feature('numcores'));
+NumCores = min(TotalTasks, max(1, feature('numcores') - 2));
 pool = parpool('local', NumCores);
 ```
 
-这样做的目的是在吞吐量与系统响应之间取得平衡，避免把所有桌面资源完全占满。
+这样做的目的是让核心数跟随任务规模变化，并给桌面环境保留余量。
 
 ### 3.2 配置物理参数与扫描参数
 
@@ -117,7 +123,7 @@ k = sqrt(2*D*tau) * 1e9;
 
 给出，`tau = 1/jf`。这把连续扩散系数映射到了离散跳跃模型中的单步位移尺度。
 
-### 3.3 预生成缺陷地图
+### 3.3 预生成缺陷地图与静态哈希表
 
 主程序不会显式生成整张超大空间地图，而是先构造一个边长为 `L_block = 10000 nm` 的基础缺陷区块，再通过旋转生成 4 张局部地图：
 
@@ -126,11 +132,18 @@ k = sqrt(2*D*tau) * 1e9;
 - 旋转 180 度 `Map3`
 - 旋转 270 度 `Map4`
 
-然后把这一组地图打包进 `MapCell`，再通过 `parallel.pool.Constant` 共享给各个 worker。这样可以同时实现：
+随后程序会把每张地图离散到固定 `100 x 100` 的局部哈希网格里，预先写入：
+
+- `HashX`
+- `HashY`
+- `HashCount`
+
+并通过 `parallel.pool.Constant` 广播给各个 worker。这样可以同时实现：
 
 - 大尺度界面异质性的轻量表示
-- worker 之间缺陷地图的低成本广播
+- worker 之间静态查表数据的低成本广播
 - 重复实验之间可控的随机对照
+- 为底层 MEX 提供缓存友好的连续内存布局
 
 ### 3.4 展开任务表
 
@@ -177,6 +190,8 @@ k = sqrt(2*D*tau) * 1e9;
 - 幂律指数 `TI`
 - 吸附时间 `Tads`
 - 漂移速度 `Vx`
+- 单步位移尺度 `k`
+- 漂移与步长比值 `ratio`
 
 因此，结果目录具备天然的参数可追溯性。
 
@@ -184,7 +199,7 @@ k = sqrt(2*D*tau) * 1e9;
 
 ## 4. 单帧内仿真引擎
 
-`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_mex.m` 是当前底层引擎的核心实现。该文件带有 `#codegen` 标记，表明它被设计为 MATLAB Coder 的 MEX 编译入口。
+`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_mex.m` 是当前底层引擎的核心实现。该文件带有 `#codegen` 标记，表明它被设计为 MATLAB Coder 的 MEX 编译入口。当前版本不再接收整块缺陷坐标矩阵，而是直接接收主程序预生成的 `HashX / HashY / HashCount` 与 `TimeSeed`。
 
 ### 4.1 运动模型
 
