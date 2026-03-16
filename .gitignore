@@ -6,3 +6,5 @@ codegen/
 *.fig
 *.mat
 *.mexw64.bak
+CDF.jpg
+SharedHash_*.bin

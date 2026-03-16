@@ -9,7 +9,7 @@ function JumpingAtMolecularFreq()
 % 5. 基于物理参数的动态 .mat 文件命名与分类归档
 % =========================================================================
 
-%codegen Sub_JumpingBetweenEachFrame_mex -args {0.0, 0.0, coder.typeof(0.0, [4, 100, 100, 150], [false, false, false, false]), coder.typeof(0.0, [4, 100, 100, 150], [false, false, false, false]), coder.typeof(0.0, [4, 100, 100], [false, false, false]), coder.typeof(0.0, [1, 12], [false, false]), 0.0} -report
+%codegen Sub_JumpingBetweenEachFrame_mex -args {0.0, 0.0, coder.typeof(0.0, [150, 100, 100, 4], [false, false, false, false]), coder.typeof(0.0, [150, 100, 100, 4], [false, false, false, false]), coder.typeof(0.0, [100, 100, 4], [false, false, false]), coder.typeof(0.0, [1, 12], [false, false]), 0.0} -report
 
 clc; close all;
 clear persistent; 

@@ -53,12 +53,15 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 │   ├── Sub_GeneratePowerLawWithMean.m
 │   └── Sub_GenerateUniformWithMean.m
 ├── 04_Analysis_Modules/
+│   ├── CDF.m
+│   ├── Smart_Folder_Plot.m
 │   ├── Sub_JumpingAnalysis.m
 │   ├── Sub_MergingLocalizationsInSameFrame.m
 │   ├── Sub_ShowProbabilityDXDY.m
 │   ├── Sub_TrajectoryAnalysis.m
 │   └── track.m
 ├── 05_Utils_and_Tests/
+│   ├── Do_Compile_HPC.m
 │   └── killall.m
 ├── Archive_Deprecated/
 │   └── .gitkeep
@@ -78,10 +81,10 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
   停留时间分布采样模块。分别提供幂律、指数、均匀分布的随机数生成。
 
 - `04_Analysis_Modules/`
-  轨迹整理与统计分析模块，包含同帧点合并、轨迹拼接、位移统计、跳跃统计和 MSD 分析。
+  轨迹整理与统计分析模块，包含同帧点合并、轨迹拼接、位移统计、跳跃统计、批量文件夹分析和分布可视化工具。
 
 - `05_Utils_and_Tests/`
-  工具与辅助脚本。目前只保留 `killall.m`。
+  工具与辅助脚本。当前包括并行环境清理脚本 `killall.m` 和 MEX 编译辅助脚本 `Do_Compile_HPC.m`。
 
 ---
 
@@ -247,17 +250,11 @@ min_d_sq < adR^2
 
 ## 5. 空间加速策略
 
-当前版本最重要的性能优化来自两个空间层设计。
+当前版本最重要的性能优化来自“静态哈希表 + 空间哈希选图 + MEX 连续内存访问”三层设计。
 
-### 5.1 局部 `3x3` 区块拼接
+### 5.1 空间哈希选图
 
-在 `Worker_JumpingTask` 中，程序不会维护整张全局缺陷图，而只在粒子周围维护局部地图 `XY_l`。当粒子偏离当前局部中心超过阈值 `Th_u` 时，程序才重建一次局部区域。
-
-重建时，不只使用当前区块，而是拼接中心区块及周围 `3x3` 邻域。这样可以避免粒子位于边界附近时漏检临近区块中的缺陷点。
-
-### 5.2 空间哈希选图
-
-局部区块使用下面的哈希式索引选择四张旋转地图之一：
+宏观空间区块使用下面的哈希式索引选择四张旋转地图之一：
 
 ```matlab
 MapIdx = mod(Ix * 73856093 + Iy * 19349663, 4) + 1;
@@ -271,14 +268,25 @@ MapIdx = mod(Ix * 73856093 + Iy * 19349663, 4) + 1;
 
 从工程上看，这是轻量级空间哈希；从建模上看，这是对异质界面的可重复近似。
 
-### 5.3 Linked-cell 近邻搜索
+### 5.2 静态哈希表
 
-底层 MEX 引擎不会对所有缺陷点做暴力距离扫描，而是先把缺陷点装配成 linked-cell 结构：
+主程序预先把每张局部地图离散成固定大小的 4D 数组：
 
-- `head`：网格单元的链表头
-- `list`：下一个缺陷点的索引
+- `HashX(max_pts, nx, ny, mapIdx)`
+- `HashY(max_pts, nx, ny, mapIdx)`
+- `HashCount(nx, ny, mapIdx)`
 
-粒子每一步只搜索自身所在网格及周围 8 个网格。这使近邻搜索从近似 `O(N)` 降为局部常数级开销，是当前版本最重要的性能优化之一。
+这样 worker 侧不再动态拼接邻域地图，也不再维护 linked-list 结构，而是直接读取目标网格中已经预排布好的候选缺陷点。
+
+### 5.3 MEX 连续内存访问
+
+底层 MEX 每一步只做三件事：
+
+1. 通过宏观坐标确定当前区块所属 `MapIdx`
+2. 通过局部坐标定位 `(ix, iy)` 网格
+3. 遍历 `HashX / HashY` 第一维上连续存放的候选点
+
+这种布局的重点不是减少总数据量，而是减少 MATLAB 层的动态对象管理与 worker 间重复搜索，把热点计算压缩到更适合 C/MEX 的顺序访问模式。
 
 ---
 
@@ -366,6 +374,12 @@ N_MSD = min(10000, size(px_total, 2) - 1);
 
 虽然当前主程序中未直接串联这一结果到首页输出，但它为后续研究停留事件统计提供了基础接口。
 
+### 7.6 批量绘图工具
+
+`Smart_Folder_Plot.m` 用于对 `Simulation_Results/Task_*` 目录做批量筛选和汇总绘图，适合对不同参数组进行 PDF、等高线和 MSD 对比。
+
+`CDF.m` 用于独立比较不同停留时间分布的概率密度形状，适合论文示意图或方法学说明。
+
 ---
 
 ## 8. 运行方式
@@ -383,6 +397,13 @@ JumpingAtMolecularFreq
 - MATLAB
 - Parallel Computing Toolbox
 - 支持 MEX 的 MATLAB 编译环境
+
+若需要重新编译底层 MEX，可额外执行：
+
+```matlab
+addpath(genpath(pwd));
+Do_Compile_HPC
+```
 
 说明：当前仓库中的 `Sub_JumpingBetweenEachFrame_mex_mex.mexw64` 仅适用于 Windows。若迁移到 Linux 或 macOS，需要重新编译 MEX。
 
@@ -414,9 +435,9 @@ Experiment_Logs/SimLog_YYYYMMDD_HHMMSS.txt
 ### 优势
 
 - 代码结构清晰，主程序与仿真/分析模块职责明确
-- 并行调度、局部地图和 linked-cell 设计有效降低了仿真成本
+- 静态哈希表、空间哈希和 MEX 顺序访问显著降低了仿真成本
 - 结果归档规则清晰，便于批量参数对比
-- 当前实现已经能够支撑论文中的位移分布与 MSD 分析
+- 当前实现已经能够支撑论文中的位移分布、MSD 与批量参数分析
 
 ### 局限
 
@@ -429,7 +450,7 @@ Experiment_Logs/SimLog_YYYYMMDD_HHMMSS.txt
 
 ## 11. 论文/答辩摘要式表述
 
-> 本工作构建了一套基于 MATLAB 的界面布朗动力学高性能仿真框架。模型通过停留时间分布、缺陷空间分布和漂移项共同描述单分子在异质界面上的随机输运过程；工程实现上则通过异步并行调度、局部区块拼接、空间哈希、linked-cell 搜索和 MEX 加速提高参数扫描效率。程序能够自动输出位移分布、跳跃长度分布和 MSD 等统计量，用于研究界面非高斯输运的形成机制。
+> 本工作构建了一套基于 MATLAB 的界面布朗动力学高性能仿真框架。模型通过停留时间分布、缺陷空间分布和漂移项共同描述单分子在异质界面上的随机输运过程；工程实现上则通过异步并行调度、静态哈希表、空间哈希和 MEX 加速提高参数扫描效率。程序能够自动输出位移分布、跳跃长度分布和 MSD 等统计量，并支持对批量结果进行二次汇总分析，用于研究界面非高斯输运的形成机制。
 
 ---
 
