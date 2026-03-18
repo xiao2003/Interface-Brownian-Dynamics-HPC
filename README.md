@@ -1,6 +1,6 @@
-﻿# Interface Brownian Dynamics HPC
+# Interface Brownian Dynamics HPC
 
-### MATLAB 框架用于界面单分子跳跃 - 停留 - 扩散过程的并行仿真与统计分析
+### MATLAB framework for parallel simulation and statistical analysis of jump-dwell-diffusion dynamics on heterogeneous interfaces
 
 ![MATLAB](https://img.shields.io/badge/language-MATLAB-orange)
 ![MEX](https://img.shields.io/badge/acceleration-MEX%20(C%2FC%2B%2B)-blue)
@@ -8,37 +8,73 @@
 ![Parallel](https://img.shields.io/badge/parallel-parpool%20%7C%20parfeval-success)
 ![Docs](https://img.shields.io/badge/docs-Chinese-important)
 
-Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建的 MATLAB 仿真项目。代码通过“缺陷吸附位点 + 停留时间分布 + 扩散 - 漂移耦合 + 轨迹统计分析”的建模方式，研究单分子在异质界面上的输运行为。当前仓库已经形成清晰的主程序、仿真引擎、分布采样和分析模块结构，适合作为论文研究、参数扫描和答辩展示的基础代码。
+Interface Brownian Dynamics HPC is a MATLAB-based simulation project for single-molecule transport on heterogeneous interfaces. The code models the coupled process of free diffusion, defect capture, adsorption waiting, desorption, and frame-wise observation, then connects the microscopic dynamics to macroscopic observables such as trajectories, jump statistics, residence-time distributions, displacement distributions, and MSD curves.
 
-## 最近整理
+This repository is not just a trajectory generator. It is a complete experiment pipeline that integrates:
 
-- 清扫了仓库根目录的历史副本脚本，只保留分层目录中的正式版本
-- 将最新 `LinkedCell + block-hash` 主程序、引擎与编译脚本合并回模块目录
-- 保持 `README` 与当前目录结构、执行流程和二进制接口一致
+- parameter sweep
+- defect-map generation
+- high-frequency MEX stepping
+- binary linked-cell indexing
+- asynchronous parallel scheduling
+- result archiving
+- post-analysis and plotting
 
----
-
-## 架构展示图
-
-![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.svg)
-
----
-
-## 1. 项目目标
-
-本项目关注的核心问题是：界面上的局部吸附、长尾停留和空间异质性，如何改变单分子的宏观输运统计行为。相比经典均匀布朗扩散模型，这类体系更容易出现：
-
-- 非高斯位移分布
-- 长尾停留事件
-- 跳跃长度统计异常
-- 漂移与扩散耦合导致的分布偏斜
-- MSD 演化偏离简单线性关系
-
-因此，项目的目标不是单纯生成随机轨迹，而是构建一套可批量扫描参数、可输出关键统计量、可支持物理解释的仿真流程。
+It is designed for large parameter scans, reproducible computational experiments, paper figures, and performance-oriented HPC execution.
 
 ---
 
-## 2. 当前代码结构
+## Architecture
+
+![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.png)
+
+---
+
+## 1. Scientific question
+
+The project focuses on a class of interface transport problems where molecules do not simply execute homogeneous Brownian motion. Instead, transport is strongly affected by:
+
+- spatially heterogeneous adsorption sites
+- stochastic trapping and desorption
+- long-tailed waiting-time statistics
+- drift-diffusion coupling
+- observation through finite camera frames
+
+These ingredients naturally produce non-classical transport signatures, including:
+
+- non-Gaussian displacement distributions
+- intermittent stop-and-go trajectories
+- anomalous jump-length statistics
+- MSD curves that deviate from simple linear scaling
+- strong dependence on adsorption radius, site spacing, and waiting-time law
+
+The central goal of the codebase is therefore:
+
+**to map microscopic adsorption and hopping rules onto measurable trajectory statistics under large-scale parameter sweeps.**
+
+---
+
+## 2. What the framework does
+
+The current framework supports the following end-to-end workflow:
+
+1. Define physical parameters and scan ranges in the main script.
+2. Generate a base defect block and derive four rotated local maps.
+3. Convert each local map into a linked-cell index.
+4. Serialize the indexed maps into `SharedHash_*.bin` files.
+5. Launch asynchronous parallel tasks with `parfeval`.
+6. Let each worker memory-map the binary index and call the linked-cell MEX engine.
+7. Recover trajectories, adsorption events, and per-event adsorption durations.
+8. Run trajectory analysis, save `.mat` outputs, and export plots.
+
+This gives the project two strong properties:
+
+- the physical model is explicit and modifiable
+- the execution path is optimized for large-scale repeated runs
+
+---
+
+## 3. Directory structure
 
 ```text
 .
@@ -69,405 +105,464 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 │   └── killall.m
 ├── Archive_Deprecated/
 │   └── .gitkeep
+├── assets/
+│   └── architecture-overview.png
 ├── .gitignore
 └── README.md
 ```
 
-### 模块职责
+---
 
-- `01_Main/JumpingAtMolecularFreq.m`
-  主入口。负责参数配置、缺陷地图预生成、任务表展开、并行调度、结果回收、自动归档与日志输出。
+## 4. Module responsibilities
 
-- `02_Simulation_Engine/`
-  单帧内微观跳跃推进引擎。当前同时保留静态哈希版和最新的 `LinkedCell + block-hash` 版，其中主程序默认使用 `Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64`。
+### `01_Main/JumpingAtMolecularFreq.m`
 
-- `03_Distributions/`
-  停留时间分布采样模块。分别提供幂律、指数、均匀分布的随机数生成。
+This is the orchestration layer of the whole project. It is responsible for:
 
-- `04_Analysis_Modules/`
-  轨迹整理与统计分析模块，包含同帧点合并、轨迹拼接、位移统计、跳跃统计、批量文件夹分析、真实吸附时间提取和分布可视化工具。
+- physical parameter configuration
+- scan-range definition
+- parallel pool setup
+- defect block generation
+- linked-cell index construction
+- binary hash export
+- task-table expansion
+- asynchronous dispatch and collection
+- run-time progress display
+- output naming and archiving
 
-- `05_Utils_and_Tests/`
-  工具与辅助脚本。当前包括并行环境清理脚本 `killall.m`、静态哈希版编译脚本 `Do_Compile_HPC.m` 和 `LinkedCell` 编译脚本 `build_linkedcell_mex.m`。
+In practical terms, this file turns a scientific scan into a reproducible batch computation.
+
+### `02_Simulation_Engine/`
+
+This directory contains the frame-level stepping engines.
+
+- `Sub_JumpingBetweenEachFrame_LinkedCell.m`
+  Current main-path engine. Uses linked-cell indexing and block-hash map selection.
+- `Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64`
+  Compiled MEX binary used for production execution on Windows.
+- `Sub_JumpingBetweenEachFrame_mex.m`
+  Older static-hash implementation retained for comparison and fallback.
+- `Sub_JumpingBetweenEachFrame_mex_mex.mexw64`
+  Compiled binary of the older path.
+
+The key design idea is that MATLAB organizes tasks, while the MEX layer executes the high-frequency microscopic stepping.
+
+### `03_Distributions/`
+
+This directory controls how adsorption waiting time is sampled.
+
+- `Sub_GeneratePowerLawWithMean.m`
+  Power-law waiting-time model. The latest version handles finite-mean and truncated regimes more robustly.
+- `Sub_GenerateExponentialWithMean.m`
+  Exponential waiting-time model for memoryless adsorption.
+- `Sub_GenerateUniformWithMean.m`
+  Uniform waiting-time model used as a simple bounded control case.
+
+These functions determine the temporal statistics of trapping, which is one of the main physical levers in the project.
+
+### `04_Analysis_Modules/`
+
+This directory contains the analysis and plotting pipeline.
+
+- `Sub_TrajectoryAnalysis.m`
+  Main trajectory-analysis entry.
+- `Sub_MergingLocalizationsInSameFrame.m`
+  Merges points falling in the same observation frame.
+- `Sub_JumpingAnalysis.m`
+  Jump statistics and displacement-oriented analysis.
+- `Sub_ShowProbabilityDXDY.m`
+  Probability visualization for displacement distributions.
+- `Smart_Folder_Plot.m`
+  Batch plotting script for folders of saved results.
+- `Actual_AdsorptionTime_Filtered.m`
+  Reconstructs the true microscopic adsorption-time distribution from saved `t_ads_history`.
+- `CDF.m`
+  CDF-oriented plotting helper.
+- `track.m`
+  Trajectory plotting utility.
+
+### `05_Utils_and_Tests/`
+
+Utility and maintenance scripts.
+
+- `killall.m`
+  Cleans stale parallel workers and related residues before a run.
+- `Do_Compile_HPC.m`
+  Compile helper for the older static-hash MEX path.
+- `build_linkedcell_mex.m`
+  Compile helper for the current linked-cell MEX path.
 
 ---
 
-## 3. 主程序工作流
+## 5. Physical model
 
-当前版本的主程序 `JumpingAtMolecularFreq.m` 可以概括为以下 6 个阶段。
+The code implements a discrete-time transport model with adsorption.
 
-### 3.1 初始化并行环境
+### 5.1 Free motion
 
-程序启动时先关闭旧并行池，再根据任务总数动态建立本地并行池：
-
-```matlab
-NumCores = min(TotalTasks, max(1, feature('numcores') - 2));
-pool = parpool('local', NumCores);
-```
-
-这样做的目的是让核心数跟随任务规模变化，并给桌面环境保留余量。
-
-### 3.2 配置物理参数与扫描参数
-
-主程序直接定义扩散、吸附和漂移相关参数，例如：
-
-- `t_total`：总采样时间尺度
-- `jf`：分子跳跃频率
-- `D`：理论扩散系数
-- `adR`：吸附半径
-- `ds`：缺陷平均间距
-- `Ts_list`：采样时间列表
-- `tmads_list`：平均吸附时间列表
-- `TimeIndex_list`：幂律指数列表
-- `Xshiftvelocity_list / Yshiftvelocity_list`：漂移速度列表
-- `DistributionModes`：分布类型列表
-
-其中单步随机热涨落的特征尺度由
+At the microscopic level, each free step is modeled as:
 
 ```matlab
-k = sqrt(2*D*tau) * 1e9;
-```
-
-给出，`tau = 1/jf`。这把连续扩散系数映射到了离散跳跃模型中的单步位移尺度。
-
-### 3.3 预生成缺陷地图与 LinkedCell 二进制索引
-
-主程序不会显式生成整张超大空间地图，而是先构造一个边长为 `L_block = 10000 nm` 的基础缺陷区块，再通过旋转生成 4 张局部地图：
-
-- 原始图 `Map1`
-- 旋转 90 度 `Map2`
-- 旋转 180 度 `Map3`
-- 旋转 270 度 `Map4`
-
-随后程序会把每张地图离散到固定 `100 x 100` 的局部网格，并生成：
-
-- 拼接后的缺陷坐标表 `AllX / AllY`
-- 每个网格的起始索引 `CellStart`
-- 每个网格的点数 `CellCount`
-
-这些数组会顺序写入 `SharedHash_*.bin` 二进制文件，再由 worker 使用 `memmapfile` 只读映射。这种实现的目标是降低大规模并行时的重复内存占用，并把近邻搜索切换为 `LinkedCell` 索引访问。这样可以同时实现：
-
-- 大尺度界面异质性的轻量表示
-- worker 之间共享同一份磁盘映射数据源
-- 重复实验之间可控的随机对照
-- 为底层 MEX 提供顺序访问的坐标表和网格索引
-
-### 3.4 展开任务表
-
-主程序把所有参数组合展开成 `Tasks` 矩阵，每一行对应一组独立仿真条件，包含：
-
-- `Ts`
-- `tm_ads`
-- `TI`
-- `vx`
-- `vy`
-- `DistMode`
-- `Rep`
-- `x0`
-- `y0`
-
-这一步把科学问题离散成可批量运行的任务集合。
-
-### 3.5 异步并行执行
-
-任务通过 `parfeval` 异步提交，由 `fetchNext` 按完成顺序回收。这意味着程序并不按参数顺序等待结果，而是优先处理最先完成的 worker 返回值，从而提高整体吞吐量。每个 worker 在执行时根据当前参数组合定位对应的 `SharedHash_*.bin` 文件，并将其映射为 `AllX / AllY / CellStart / CellCount` 视图后再调用底层 `LinkedCell` MEX。
-
-同时，程序使用 `parallel.pool.DataQueue` 回传进度，并在主线程侧实时刷新：
-
-- 总体进度百分比
-- 已完成任务数
-- 当前活跃节点数
-- 预计剩余时间 ETA
-
-### 3.6 自动归档和后处理
-
-每个任务完成后，主程序会：
-
-1. 清理 NaN 定位点
-2. 调用 `Sub_TrajectoryAnalysis`
-3. 按参数生成结果子目录和文件名前缀
-4. 保存 `.mat` 数据文件
-5. 导出统计图像
-6. 写入实验日志
-
-当前文件名中已经编码：
-
-- 重复编号 `Rep`
-- 分布类型 `PowerLaw / Exp / Uniform`
-- 幂律指数 `TI`
-- 吸附时间 `Tads`
-- 缺陷平均间距 `DS`
-- 吸附半径 `adR`
-- 跳跃频率 `jf`
-- 漂移与步长比值 `ratio`
-
-因此，结果目录具备天然的参数可追溯性。
-
----
-
-## 4. 单帧内仿真引擎
-
-`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_LinkedCell.m` 是当前主链路使用的底层引擎。它接收拼接后的缺陷坐标表 `AllX / AllY` 以及网格索引 `CellStart / CellCount`，并通过 block-hash 选择四张旋转地图之一。仓库中旧的静态哈希版 `Sub_JumpingBetweenEachFrame_mex.m` 仍被保留，便于对比和回退。
-
-### 4.1 运动模型
-
-粒子在单个微观步上的位置更新为：
-
-```matlab
-dx = k*randn + vx;
-dy = k*randn + vy;
+dx = k * randn + vx;
+dy = k * randn + vy;
 xe = xb + dx;
 ye = yb + dy;
 ```
 
-其中：
+where:
 
-- `k*randn` 表示热噪声驱动下的随机扩散位移
-- `vx, vy` 表示外加漂移引入的偏置运动
+- `k = sqrt(2*D*tau) * 1e9`
+- `D` is the diffusion coefficient
+- `tau = 1/jf` is the elementary jump time
+- `vx, vy` are drift terms
 
-因此该模型本质上是一个离散化的扩散 - 漂移耦合模型。
+This is a discretized drift-diffusion process.
 
-### 4.2 吸附判据
+### 5.2 Adsorption criterion
 
-对每一步新位置，程序会计算到最近缺陷点的最小距离平方 `min_d_sq`。若满足：
+After each tentative move, the engine finds the nearest defect candidate in the relevant local neighborhood. If the squared distance satisfies
 
 ```matlab
 min_d_sq < adR^2
 ```
 
-则视为发生吸附事件。这相当于把局域界面作用势压缩为“有效吸附半径”这一几何判据。
+the particle is considered captured by the interface defect.
 
-### 4.3 停留时间采样
+Here:
 
-一旦发生吸附，程序根据 `DistMode` 调用不同的停留时间生成函数：
+- `adR` is the effective adsorption radius
+- the defect field is geometrically explicit rather than mean-field averaged
 
-- `Sub_GeneratePowerLawWithMean`
-- `Sub_GenerateExponentialWithMean`
-- `Sub_GenerateUniformWithMean`
+This means adsorption is controlled jointly by spatial structure and stochastic motion.
 
-这部分是整个科学建模中最关键的时间统计层。当前项目的核心思想之一就是：异常输运很多时候不是由步长异常主导，而是由停留时间统计异常主导。
+### 5.3 Waiting-time model
 
-### 4.4 残余时间传递
+Once adsorption occurs, a residence time is drawn from the selected distribution model:
 
-采样窗口结束后，多余的停留或跳跃时间会被记作 `t_r`，并返回主程序，在下一帧分析参数中继续使用。这个机制避免了简单截断造成的物理不连续。
+- power law
+- exponential
+- uniform
 
----
+This is physically important because many anomalous transport behaviors are driven more by waiting-time statistics than by anomalous step-length statistics.
 
-## 5. 空间加速策略
+### 5.4 Residual time across observation windows
 
-当前版本最重要的性能优化来自“二进制 LinkedCell 索引 + 空间哈希选图 + MEX 连续内存访问”三层设计。
+The engine tracks leftover time `t_r` when a microscopic event crosses the boundary of an observation frame. This avoids an artificial reset at each frame and preserves time continuity between consecutive observation windows.
 
-### 5.1 空间哈希选图
-
-宏观空间区块使用下面的哈希式索引选择四张旋转地图之一：
-
-```matlab
-MapIdx = mod(Ix * 73856093 + Iy * 19349663, 4) + 1;
-```
-
-它的作用是：
-
-- 让同一个空间块始终映射到同一张局部地图
-- 避免大尺度空间中所有区块完全相同
-- 用极少的基础模板扩展到更大范围
-
-从工程上看，这是轻量级空间哈希；从建模上看，这是对异质界面的可重复近似。
-
-### 5.2 LinkedCell 索引与磁盘映射
-
-主程序预先把每张局部地图中的缺陷点按网格排序，并整理成：
-
-- `AllX / AllY`：四张地图拼接后的坐标表
-- `CellStart`：某个网格在坐标表中的起点
-- `CellCount`：某个网格内的点数
-
-这些数组会先被顺序写入 `SharedHash_Rep*_ds*_adR*.bin` 文件。worker 侧通过 `memmapfile` 将其映射为只读数组视图，再交给底层 MEX 使用。这样 worker 不再广播完整哈希张量，而是直接读取顺序坐标表与网格索引。
-
-### 5.3 MEX 连续内存访问
-
-底层 MEX 每一步只做三件事：
-
-1. 通过宏观坐标确定当前区块所属 `MapIdx`
-2. 通过局部坐标定位 `(ix, iy)` 网格及其 `3x3` 邻域
-3. 根据 `CellStart / CellCount` 在 `AllX / AllY` 中遍历连续候选点
-
-这种布局的重点不是减少总数据量，而是减少 MATLAB 层的动态对象管理与 worker 间重复搜索，把热点计算压缩到更适合 C/MEX 的顺序访问模式。
+This is essential for physically faithful frame-based simulation.
 
 ---
 
-## 6. 停留时间分布模块
+## 6. Spatial model and acceleration strategy
 
-`03_Distributions/` 下当前有三类分布函数。
+The latest architecture replaces full-map brute-force searching with a compact block-based and linked-cell-based spatial indexing scheme.
 
-### 6.1 幂律分布
+### 6.1 Base block plus four rotations
 
-`Sub_GeneratePowerLawWithMean.m` 根据指定均值反推 `xmin`，再使用逆变换采样：
+The main script first generates one square defect block of side length `L_block`. It then builds four local maps:
 
-```matlab
-PN = xmin * (1 - u).^(1 / (1 - alpha));
-```
+- original
+- 90 degree rotation
+- 180 degree rotation
+- 270 degree rotation
 
-该模型适合描述长尾停留事件明显的界面体系。
+This gives controlled spatial heterogeneity without storing a globally huge explicit map.
 
-### 6.2 指数分布
+The large interface is then represented conceptually as a tiling of local blocks whose map identity is selected by a block hash.
 
-`Sub_GenerateExponentialWithMean.m` 使用标准指数分布逆 CDF：
+### 6.2 Block-hash map selection
 
-```matlab
-EN = -log(1 - u) / lambda;
-```
+During simulation, the particle position determines a global block index:
 
-适合描述无记忆停留过程。
+- `bx_global`
+- `by_global`
 
-### 6.3 均匀分布
-
-`Sub_GenerateUniformWithMean.m` 根据均值和区间长度反推上下界，再在线性区间中采样：
+These indices are mixed with two primes and `TimeSeed` to choose one of the four local maps:
 
 ```matlab
-UN = a + (b - a) * u;
+MapIdx_i = mod(bx_global * PrimeX + by_global * PrimeY + TimeSeed, 4) + 1
 ```
 
-适合作为对照分布。
+This gives a reproducible pseudo-random spatial pattern with low storage cost.
+
+The purpose is not cryptographic hashing. The purpose is to cheaply produce spatial heterogeneity with deterministic replay.
+
+### 6.3 Linked-cell index
+
+Each local map is partitioned into a regular `nx x ny` grid controlled by `cell_size`. Instead of storing a dense tensor of nearby defects, the code stores:
+
+- `AllX`
+- `AllY`
+- `CellStart`
+- `CellCount`
+
+`AllX` and `AllY` are the concatenated defect coordinates after sorting by cell id. `CellStart` and `CellCount` tell the engine where the points of a given cell begin and how many there are.
+
+This is a standard linked-cell idea adapted to the defect-search problem.
+
+### 6.4 Binary serialization plus `memmapfile`
+
+The indexed arrays are written into `SharedHash_Rep*_ds*_adR*.bin` files and loaded in each worker through `memmapfile`.
+
+This choice has two practical advantages:
+
+- workers do not need a giant MATLAB-side broadcast tensor as the main runtime data source
+- the MEX engine receives sequential arrays that are much friendlier to low-level iteration
+
+So the current acceleration strategy is:
+
+**block-hash for macro heterogeneity + linked-cell for local search + MEX for inner-loop stepping**
 
 ---
 
-## 7. 轨迹分析模块
+## 7. Execution pipeline
 
-`04_Analysis_Modules/Sub_TrajectoryAnalysis.m` 是仿真后处理的主入口。它的功能不是简单画图，而是将原始定位点转换为具有物理解释的统计结果。
+The current main workflow in `JumpingAtMolecularFreq.m` can be read as seven stages.
 
-### 7.1 同帧点合并
+### 7.1 Initialize runtime
 
-`Sub_MergingLocalizationsInSameFrame.m` 会按帧对定位点做平均，生成每帧一个代表位置，用于减少重复采样点对轨迹分析的干扰。
+The script clears stale state, closes old pools, and starts a fresh local parallel pool sized to the total workload while leaving some CPU headroom.
 
-### 7.2 轨迹拼接
+### 7.2 Define scan parameters
 
-之后程序调用 `track.m` 对离散定位点进行轨迹重建。`track.m` 是经典粒子追踪算法的 MATLAB 版本，适合从逐帧散点恢复连续轨迹编号。
+The script currently scans or configures variables such as:
 
-### 7.3 统计量提取
+- `t_total`
+- `D`
+- `jf_list`
+- `adR_list`
+- `ds_list`
+- `Repeats`
+- `DistributionModes`
+- `TimeIndex_list`
+- `Ts_list`
+- `tmads_list`
+- `Vx_ratio_list`
+- `Vy_ratio_list`
 
-分析模块从轨迹中提取：
+These parameters collectively control geometry, dynamics, and observation conditions.
 
-- `DX, DY`：步间位移分量
-- `DL`：步长模长
-- `MSD`：均方位移
-- `theta, Dphi`：方向变化特征
-- `SD`：MSD 线性拟合斜率
+### 7.3 Pre-generate indexed defect maps
 
-并据此生成：
+For each `Rep`, `ds`, and `adR`, the script generates the base map, derives four rotated maps, sorts points into linked cells, and writes one binary index file.
 
-- 二维 `dx-dy` 热图
-- 一维位移分布图
-- 跳跃长度分布图
-- MSD 拟合曲线
+This shifts expensive preprocessing out of the innermost loop.
 
-### 7.4 MSD 实现细节
+### 7.4 Expand the task table
 
-当前 MSD 采用时间平均方式构造 `MSD_TA`，并将分析长度限制为：
+All parameter combinations are packed into the `Tasks` matrix. Each row is an independent experiment unit.
 
-```matlab
-N_MSD = min(10000, size(px_total, 2) - 1);
-```
+This makes the simulation naturally suitable for asynchronous parallel execution.
 
-这样做的目的很明确：避免分析阶段因为轨迹过长而成为新的内存和时间瓶颈。
+### 7.5 Dispatch with `parfeval`
 
-### 7.5 额外统计
+Tasks are submitted as futures rather than run in a single blocking loop. Results are collected with `fetchNext`, so fast workers are not forced to wait for slow parameter combinations.
 
-`Sub_JumpingAnalysis.m` 可进一步统计：
+This improves throughput and gives smooth progress reporting.
 
-- 每条轨迹的跳跃次数
-- 相邻跳跃之间的停留时间长度
+### 7.6 Run the linked-cell MEX engine
 
-虽然当前主程序中未直接串联这一结果到首页输出，但它为后续研究停留事件统计提供了基础接口。
+Each worker locates the relevant `SharedHash_*.bin` file, maps it into memory, reconstructs the array views, and calls the linked-cell MEX engine to simulate one frame sequence.
 
-### 7.6 批量绘图工具
+The engine returns:
 
-`Smart_Folder_Plot.m` 用于对 `Simulation_Results/Task_*` 目录做批量筛选和汇总绘图，适合对不同参数组进行 PDF、等高线和 MSD 对比。
+- updated coordinates
+- adsorption coordinates
+- residual time
+- `t_ads_history`
 
-`CDF.m` 用于独立比较不同停留时间分布的概率密度形状，适合论文示意图或方法学说明。
+The explicit saving of `t_ads_history` is important because it allows later reconstruction of the actual microscopic adsorption-time distribution.
 
-`Actual_AdsorptionTime_Filtered.m` 用于从保存的 `t_ads_history` 中恢复真实微观吸附时间分布，并将其与宏观 MSD、轨迹形态放进同一张综合图。
+### 7.7 Analyze and archive outputs
+
+After each task returns, the main script:
+
+- removes invalid points
+- runs analysis
+- creates parameter-specific output folders
+- writes result `.mat` files
+- exports plots
+- appends logs
+
+This makes the repository useful as a production experiment framework, not just a prototype model.
 
 ---
 
-## 8. 运行方式
+## 8. Why the current framework is faster
 
-在 MATLAB 中进入仓库根目录后执行：
+Compared with the earliest brute-force versions, the current architecture improves performance for structural reasons.
+
+### 8.1 Old bottleneck
+
+The older logic relied on larger explicit defect arrays and repeated neighborhood searching in MATLAB space. That design incurred:
+
+- large temporary arrays
+- repeated nearest-neighbor scans
+- more memory pressure under many workers
+- more MATLAB-layer loop overhead
+
+### 8.2 Current optimization layers
+
+The current code reduces those costs with three changes:
+
+1. Use a base block plus hash-selected rotated maps instead of a huge explicit global map.
+2. Use linked-cell indexing so the engine checks only nearby cells instead of scanning all defects.
+3. Push the microscopic stepping loop into a compiled MEX binary.
+
+This is why the new framework is not just a code cleanup. It is a real runtime architecture upgrade.
+
+### 8.3 Memory strategy
+
+The current main path writes the indexed defect arrays into binary files and maps them at runtime. This reduces the dependence on repeatedly broadcasting large MATLAB arrays into every task call and keeps the worker-side data path simpler.
+
+It does not magically eliminate all worker memory cost, but it is a much better fit for large parallel runs than the old brute-force layout.
+
+---
+
+## 9. Output content
+
+The framework saves both raw and derived data.
+
+Typical outputs include:
+
+- trajectory coordinates
+- adsorption coordinates
+- jump statistics
+- MSD-related quantities
+- frame-wise merged localizations
+- generated figures
+- run logs
+- `t_ads_history`
+
+The file and folder names encode parameters such as:
+
+- `Rep`
+- distribution mode
+- `TI`
+- `Tads`
+- `DS`
+- `adR`
+- `jf`
+- drift-to-step ratio
+
+This makes the output naturally traceable and suitable for later comparison across runs.
+
+---
+
+## 10. Analysis capabilities
+
+The analysis layer is one of the strengths of the project.
+
+### `Sub_TrajectoryAnalysis`
+
+Per-run trajectory analysis and summary generation.
+
+### `Smart_Folder_Plot`
+
+Folder-level aggregation and batch plotting, useful after large scans have finished.
+
+### `Actual_AdsorptionTime_Filtered`
+
+This script is especially important in the latest workflow. It reconstructs the actual microscopic adsorption-time distribution from saved `t_ads_history`, filters and aggregates the results, and combines them with trajectory and MSD information in a unified figure.
+
+That means the project can now compare:
+
+- the theoretical waiting-time law used during simulation
+- the actual realized adsorption-time statistics in the generated trajectories
+
+This greatly improves interpretability.
+
+---
+
+## 11. How to run
+
+1. Open MATLAB in the repository root.
+2. Ensure the subfolders are on the MATLAB path.
+3. Confirm that the Windows MEX binary is available.
+4. Run:
 
 ```matlab
-addpath(genpath(pwd));
 JumpingAtMolecularFreq
 ```
 
-推荐环境：
+If you want to change the experimental design, edit the parameter section in:
 
-- Windows
-- MATLAB
-- Parallel Computing Toolbox
-- 支持 MEX 的 MATLAB 编译环境
+- `01_Main/JumpingAtMolecularFreq.m`
 
-若需要重新编译底层 MEX，可额外执行：
+before launching the run.
 
-```matlab
-addpath(genpath(pwd));
-Do_Compile_HPC
-```
+---
 
-若需要重新编译当前主链路使用的 `LinkedCell` MEX，可执行：
+## 12. How to recompile the current MEX
+
+To rebuild the linked-cell MEX used by the current main path, run:
 
 ```matlab
-addpath(genpath(pwd));
 build_linkedcell_mex
 ```
 
-说明：当前仓库中的 `Sub_JumpingBetweenEachFrame_mex_mex.mexw64` 仅适用于 Windows。若迁移到 Linux 或 macOS，需要重新编译 MEX，并重新确认 `memmapfile` 路径与并行行为。
+If you need the older static-hash path, use:
 
----
-
-## 9. 输出结果
-
-程序运行后会自动生成：
-
-```text
-Simulation_Results/Task_YYYYMMDD_HHMMSS/
-Experiment_Logs/SimLog_YYYYMMDD_HHMMSS.txt
+```matlab
+Do_Compile_HPC
 ```
 
-每个参数组合会拥有独立结果子目录，内部通常包括：
+Notes:
 
-- `.mat` 数据包
-- `dx-dy` 热图
-- 位移分布图
-- 跳跃长度分布图
-- MSD 拟合图
-
-这些运行结果属于批处理产物，已通过 `.gitignore` 排除，不直接纳入源码仓库。
+- the committed `.mexw64` binaries are Windows-specific
+- Linux and macOS require recompilation
+- changes in MATLAB Coder behavior or compiler toolchain may require updating the build script
 
 ---
 
-## 10. 当前版本的优势与局限
+## 13. Current innovations
 
-### 优势
+From an engineering perspective, the most important innovations of the current repository are:
 
-- 代码结构清晰，主程序与仿真/分析模块职责明确
-- `LinkedCell` 索引、空间哈希和 MEX 顺序访问显著降低了仿真成本
-- 结果归档规则清晰，便于批量参数对比
-- 当前实现已经能够支撑论文中的位移分布、MSD、真实吸附时间和批量参数分析
+- MATLAB orchestration plus MEX microscopic stepping
+- block-hash selection of rotated local maps
+- linked-cell indexing instead of brute-force spatial search
+- binary indexed map export plus worker-side `memmapfile`
+- asynchronous `parfeval` scheduling instead of a purely sequential or rigid loop
+- explicit saving of `t_ads_history` for post hoc adsorption-time reconstruction
 
-### 局限
+From a scientific-computing perspective, the code is valuable because it ties together:
 
-- 主参数仍直接写在脚本内部，缺少统一配置文件
-- 注释存在部分历史编码问题，影响可读性但不影响运行
-- MEX 二进制当前仅提供 Windows 版本
-- 当前统计量以位移分布和 MSD 为主，尚未扩展到更丰富的非高斯指标
+- spatial heterogeneity
+- temporal heterogeneity
+- drift-diffusion motion
+- frame-based observation
+- post-analysis reproducibility
+
+in one coherent pipeline.
 
 ---
 
-## 11. 论文/答辩摘要式表述
+## 14. Practical notes
 
-> 本工作构建了一套基于 MATLAB 的界面布朗动力学高性能仿真框架。模型通过停留时间分布、缺陷空间分布和漂移项共同描述单分子在异质界面上的随机输运过程；工程实现上则通过异步并行调度、静态哈希表、空间哈希和 MEX 加速提高参数扫描效率。程序能够自动输出位移分布、跳跃长度分布和 MSD 等统计量，并支持对批量结果进行二次汇总分析，用于研究界面非高斯输运的形成机制。
+- The repository keeps some older engine files intentionally for comparison, reproducibility, and fallback.
+- Temporary `SharedHash_*.bin` files are generated during execution and cleaned by the runtime logic.
+- The default production path is the linked-cell MEX workflow, not the older static-hash path.
+- The project is currently organized for Windows MATLAB workflows and parallel local execution.
 
 ---
 
-## 12. Repository
+## 15. Summary
 
-GitHub: [xiao2003/Interface-Brownian-Dynamics-HPC](https://github.com/xiao2003/Interface-Brownian-Dynamics-HPC)
+Interface Brownian Dynamics HPC is a simulation-and-analysis framework for single-molecule transport on heterogeneous interfaces. Its current architecture uses:
+
+- block-based defect generation
+- hash-selected rotated maps
+- linked-cell spatial indexing
+- binary mapped data exchange
+- MEX-accelerated microscopic stepping
+- asynchronous parallel dispatch
+- trajectory and adsorption-time analysis
+
+The result is a codebase that is simultaneously:
+
+- physically interpretable
+- computationally scalable
+- suitable for large parameter sweeps
+- structured for paper-grade analysis and figure generation
+
