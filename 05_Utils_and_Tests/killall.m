@@ -1,6 +1,6 @@
 % killall.m - 一键中止并行、清理内存、冷却 CPU
 function killall()
-    fprintf('>>> 正在强制中止所有并行任务...\n');
+    fprintf('>>> 正在中止所有并行任务...\n');
     
     % 1. 销毁并行池
     try
@@ -27,5 +27,5 @@ function killall()
     java.lang.System.gc();
     
     clc;
-    fprintf('>>> 已清理完毕。冷却中...\n');
+    fprintf('>>> 已清理完毕。\n');
 end

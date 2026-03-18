@@ -13,14 +13,14 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 ## 最近整理
 
 - 清扫了仓库根目录的历史副本脚本，只保留分层目录中的正式版本
-- 将静态哈希查表版主程序与 MEX 入口合并回 `01_Main/` 和 `02_Simulation_Engine/`
+- 将最新 `LinkedCell + block-hash` 主程序、引擎与编译脚本合并回模块目录
 - 保持 `README` 与当前目录结构、执行流程和二进制接口一致
 
 ---
 
 ## 架构展示图
 
-![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.png)
+![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.svg)
 
 ---
 
@@ -46,6 +46,8 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 │   └── JumpingAtMolecularFreq.m
 ├── 02_Simulation_Engine/
 │   ├── Sub_JumpingBetweenEachFrame.m
+│   ├── Sub_JumpingBetweenEachFrame_LinkedCell.m
+│   ├── Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64
 │   ├── Sub_JumpingBetweenEachFrame_mex.m
 │   └── Sub_JumpingBetweenEachFrame_mex_mex.mexw64
 ├── 03_Distributions/
@@ -53,6 +55,7 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 │   ├── Sub_GeneratePowerLawWithMean.m
 │   └── Sub_GenerateUniformWithMean.m
 ├── 04_Analysis_Modules/
+│   ├── Actual_AdsorptionTime_Filtered.m
 │   ├── CDF.m
 │   ├── Smart_Folder_Plot.m
 │   ├── Sub_JumpingAnalysis.m
@@ -62,6 +65,7 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
 │   └── track.m
 ├── 05_Utils_and_Tests/
 │   ├── Do_Compile_HPC.m
+│   ├── build_linkedcell_mex.m
 │   └── killall.m
 ├── Archive_Deprecated/
 │   └── .gitkeep
@@ -75,16 +79,16 @@ Interface Brownian Dynamics HPC 是一个围绕界面非高斯输运问题构建
   主入口。负责参数配置、缺陷地图预生成、任务表展开、并行调度、结果回收、自动归档与日志输出。
 
 - `02_Simulation_Engine/`
-  单帧内微观跳跃推进引擎。`Sub_JumpingBetweenEachFrame_mex.m` 是 MATLAB Coder 目标文件，`Sub_JumpingBetweenEachFrame_mex_mex.mexw64` 是当前可直接调用的 Windows MEX 二进制。
+  单帧内微观跳跃推进引擎。当前同时保留静态哈希版和最新的 `LinkedCell + block-hash` 版，其中主程序默认使用 `Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64`。
 
 - `03_Distributions/`
   停留时间分布采样模块。分别提供幂律、指数、均匀分布的随机数生成。
 
 - `04_Analysis_Modules/`
-  轨迹整理与统计分析模块，包含同帧点合并、轨迹拼接、位移统计、跳跃统计、批量文件夹分析和分布可视化工具。
+  轨迹整理与统计分析模块，包含同帧点合并、轨迹拼接、位移统计、跳跃统计、批量文件夹分析、真实吸附时间提取和分布可视化工具。
 
 - `05_Utils_and_Tests/`
-  工具与辅助脚本。当前包括并行环境清理脚本 `killall.m` 和 MEX 编译辅助脚本 `Do_Compile_HPC.m`。
+  工具与辅助脚本。当前包括并行环境清理脚本 `killall.m`、静态哈希版编译脚本 `Do_Compile_HPC.m` 和 `LinkedCell` 编译脚本 `build_linkedcell_mex.m`。
 
 ---
 
@@ -126,7 +130,7 @@ k = sqrt(2*D*tau) * 1e9;
 
 给出，`tau = 1/jf`。这把连续扩散系数映射到了离散跳跃模型中的单步位移尺度。
 
-### 3.3 预生成缺陷地图与二进制静态哈希表
+### 3.3 预生成缺陷地图与 LinkedCell 二进制索引
 
 主程序不会显式生成整张超大空间地图，而是先构造一个边长为 `L_block = 10000 nm` 的基础缺陷区块，再通过旋转生成 4 张局部地图：
 
@@ -135,18 +139,18 @@ k = sqrt(2*D*tau) * 1e9;
 - 旋转 180 度 `Map3`
 - 旋转 270 度 `Map4`
 
-随后程序会把每张地图离散到固定 `100 x 100` 的局部哈希网格里，预先写入：
+随后程序会把每张地图离散到固定 `100 x 100` 的局部网格，并生成：
 
-- `HashX`
-- `HashY`
-- `HashCount`
+- 拼接后的缺陷坐标表 `AllX / AllY`
+- 每个网格的起始索引 `CellStart`
+- 每个网格的点数 `CellCount`
 
-当前版本不会再把整套哈希表直接广播到每个 worker，而是先把它们写入 `SharedHash_*.bin` 二进制文件，再由 worker 使用 `memmapfile` 只读映射。这种实现的目标是降低大规模并行时的重复内存占用。这样可以同时实现：
+这些数组会顺序写入 `SharedHash_*.bin` 二进制文件，再由 worker 使用 `memmapfile` 只读映射。这种实现的目标是降低大规模并行时的重复内存占用，并把近邻搜索切换为 `LinkedCell` 索引访问。这样可以同时实现：
 
 - 大尺度界面异质性的轻量表示
 - worker 之间共享同一份磁盘映射数据源
 - 重复实验之间可控的随机对照
-- 为底层 MEX 提供缓存友好的连续内存布局
+- 为底层 MEX 提供顺序访问的坐标表和网格索引
 
 ### 3.4 展开任务表
 
@@ -166,7 +170,7 @@ k = sqrt(2*D*tau) * 1e9;
 
 ### 3.5 异步并行执行
 
-任务通过 `parfeval` 异步提交，由 `fetchNext` 按完成顺序回收。这意味着程序并不按参数顺序等待结果，而是优先处理最先完成的 worker 返回值，从而提高整体吞吐量。每个 worker 在执行时根据当前参数组合定位对应的 `SharedHash_*.bin` 文件，并将其映射为 `HashX / HashY / HashCount` 视图后再调用底层 MEX。
+任务通过 `parfeval` 异步提交，由 `fetchNext` 按完成顺序回收。这意味着程序并不按参数顺序等待结果，而是优先处理最先完成的 worker 返回值，从而提高整体吞吐量。每个 worker 在执行时根据当前参数组合定位对应的 `SharedHash_*.bin` 文件，并将其映射为 `AllX / AllY / CellStart / CellCount` 视图后再调用底层 `LinkedCell` MEX。
 
 同时，程序使用 `parallel.pool.DataQueue` 回传进度，并在主线程侧实时刷新：
 
@@ -203,7 +207,7 @@ k = sqrt(2*D*tau) * 1e9;
 
 ## 4. 单帧内仿真引擎
 
-`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_mex.m` 是当前底层引擎的核心实现。该文件带有 `#codegen` 标记，表明它被设计为 MATLAB Coder 的 MEX 编译入口。当前版本不再接收整块缺陷坐标矩阵，而是直接接收主程序预生成的 `HashX / HashY / HashCount` 与 `TimeSeed`。
+`02_Simulation_Engine/Sub_JumpingBetweenEachFrame_LinkedCell.m` 是当前主链路使用的底层引擎。它接收拼接后的缺陷坐标表 `AllX / AllY` 以及网格索引 `CellStart / CellCount`，并通过 block-hash 选择四张旋转地图之一。仓库中旧的静态哈希版 `Sub_JumpingBetweenEachFrame_mex.m` 仍被保留，便于对比和回退。
 
 ### 4.1 运动模型
 
@@ -251,7 +255,7 @@ min_d_sq < adR^2
 
 ## 5. 空间加速策略
 
-当前版本最重要的性能优化来自“二进制静态哈希表 + 空间哈希选图 + MEX 连续内存访问”三层设计。
+当前版本最重要的性能优化来自“二进制 LinkedCell 索引 + 空间哈希选图 + MEX 连续内存访问”三层设计。
 
 ### 5.1 空间哈希选图
 
@@ -269,23 +273,23 @@ MapIdx = mod(Ix * 73856093 + Iy * 19349663, 4) + 1;
 
 从工程上看，这是轻量级空间哈希；从建模上看，这是对异质界面的可重复近似。
 
-### 5.2 静态哈希表与磁盘映射
+### 5.2 LinkedCell 索引与磁盘映射
 
-主程序预先把每张局部地图离散成固定大小的 4D 数组：
+主程序预先把每张局部地图中的缺陷点按网格排序，并整理成：
 
-- `HashX(max_pts, nx, ny, mapIdx)`
-- `HashY(max_pts, nx, ny, mapIdx)`
-- `HashCount(nx, ny, mapIdx)`
+- `AllX / AllY`：四张地图拼接后的坐标表
+- `CellStart`：某个网格在坐标表中的起点
+- `CellCount`：某个网格内的点数
 
-这些数组会先被顺序写入 `SharedHash_Rep*_ds*_adR*.bin` 文件。worker 侧通过 `memmapfile` 将其映射为只读数组视图，再交给底层 MEX 使用。这样 worker 不再动态拼接邻域地图，也不再维护 linked-list 结构，而是直接读取目标网格中已经预排布好的候选缺陷点。
+这些数组会先被顺序写入 `SharedHash_Rep*_ds*_adR*.bin` 文件。worker 侧通过 `memmapfile` 将其映射为只读数组视图，再交给底层 MEX 使用。这样 worker 不再广播完整哈希张量，而是直接读取顺序坐标表与网格索引。
 
 ### 5.3 MEX 连续内存访问
 
 底层 MEX 每一步只做三件事：
 
 1. 通过宏观坐标确定当前区块所属 `MapIdx`
-2. 通过局部坐标定位 `(ix, iy)` 网格
-3. 遍历 `HashX / HashY` 第一维上连续存放的候选点
+2. 通过局部坐标定位 `(ix, iy)` 网格及其 `3x3` 邻域
+3. 根据 `CellStart / CellCount` 在 `AllX / AllY` 中遍历连续候选点
 
 这种布局的重点不是减少总数据量，而是减少 MATLAB 层的动态对象管理与 worker 间重复搜索，把热点计算压缩到更适合 C/MEX 的顺序访问模式。
 
@@ -381,6 +385,8 @@ N_MSD = min(10000, size(px_total, 2) - 1);
 
 `CDF.m` 用于独立比较不同停留时间分布的概率密度形状，适合论文示意图或方法学说明。
 
+`Actual_AdsorptionTime_Filtered.m` 用于从保存的 `t_ads_history` 中恢复真实微观吸附时间分布，并将其与宏观 MSD、轨迹形态放进同一张综合图。
+
 ---
 
 ## 8. 运行方式
@@ -404,6 +410,13 @@ JumpingAtMolecularFreq
 ```matlab
 addpath(genpath(pwd));
 Do_Compile_HPC
+```
+
+若需要重新编译当前主链路使用的 `LinkedCell` MEX，可执行：
+
+```matlab
+addpath(genpath(pwd));
+build_linkedcell_mex
 ```
 
 说明：当前仓库中的 `Sub_JumpingBetweenEachFrame_mex_mex.mexw64` 仅适用于 Windows。若迁移到 Linux 或 macOS，需要重新编译 MEX，并重新确认 `memmapfile` 路径与并行行为。
@@ -436,9 +449,9 @@ Experiment_Logs/SimLog_YYYYMMDD_HHMMSS.txt
 ### 优势
 
 - 代码结构清晰，主程序与仿真/分析模块职责明确
-- 静态哈希表、空间哈希和 MEX 顺序访问显著降低了仿真成本
+- `LinkedCell` 索引、空间哈希和 MEX 顺序访问显著降低了仿真成本
 - 结果归档规则清晰，便于批量参数对比
-- 当前实现已经能够支撑论文中的位移分布、MSD 与批量参数分析
+- 当前实现已经能够支撑论文中的位移分布、MSD、真实吸附时间和批量参数分析
 
 ### 局限
 

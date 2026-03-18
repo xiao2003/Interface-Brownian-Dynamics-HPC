@@ -1,0 +1,118 @@
+<svg width="1400" height="860" viewBox="0 0 1400 860" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1400" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4F1E8"/>
+      <stop offset="1" stop-color="#E6EEF2"/>
+    </linearGradient>
+    <linearGradient id="panelA" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FBFCF6"/>
+      <stop offset="1" stop-color="#F1F5E8"/>
+    </linearGradient>
+    <linearGradient id="panelB" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF8EF"/>
+      <stop offset="1" stop-color="#F8EBD7"/>
+    </linearGradient>
+    <linearGradient id="panelC" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F3FAFD"/>
+      <stop offset="1" stop-color="#DDEFF6"/>
+    </linearGradient>
+    <linearGradient id="panelD" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F8F5FC"/>
+      <stop offset="1" stop-color="#E7E0F5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#20313A" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3E5963"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="860" rx="24" fill="url(#bg)"/>
+  <text x="76" y="86" fill="#19323C" font-family="Segoe UI, Arial, sans-serif" font-size="36" font-weight="700">
+    Interface Brownian Dynamics HPC
+  </text>
+  <text x="76" y="124" fill="#4A6168" font-family="Segoe UI, Arial, sans-serif" font-size="20">
+    Latest runtime architecture: linked-cell binary indices, memmap workers, block-hash MEX stepping, analysis and logging
+  </text>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="180" width="280" height="210" rx="24" fill="url(#panelA)" stroke="#8CA775" stroke-width="2"/>
+    <text x="96" y="226" fill="#294033" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">01_Main</text>
+    <text x="96" y="260" fill="#405E4D" font-family="Segoe UI, Arial, sans-serif" font-size="18">JumpingAtMolecularFreq.m</text>
+    <text x="96" y="302" fill="#294033" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Scan jf / adR / ds / TI / ratio</text>
+    <text x="96" y="330" fill="#294033" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Build 4 rotated defect maps</text>
+    <text x="96" y="358" fill="#294033" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Generate task matrix</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="410" y="180" width="300" height="250" rx="24" fill="url(#panelB)" stroke="#C18C3C" stroke-width="2"/>
+    <text x="436" y="226" fill="#5B3A12" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">LinkedCell Build</text>
+    <text x="436" y="260" fill="#6D4C23" font-family="Segoe UI, Arial, sans-serif" font-size="18">AllX / AllY / CellStart / CellCount</text>
+    <text x="436" y="302" fill="#5B3A12" font-family="Segoe UI, Arial, sans-serif" font-size="16">- 100 x 100 local grids</text>
+    <text x="436" y="330" fill="#5B3A12" font-family="Segoe UI, Arial, sans-serif" font-size="16">- 4 rotated macro-block templates</text>
+    <text x="436" y="358" fill="#5B3A12" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Sorted coordinates + grid starts</text>
+    <rect x="436" y="382" width="248" height="30" rx="15" fill="#FFF4DE"/>
+    <text x="454" y="402" fill="#7B5522" font-family="Consolas, monospace" font-size="14">SharedHash_Rep*_ds*_adR*.bin</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="770" y="180" width="270" height="250" rx="24" fill="url(#panelC)" stroke="#4C8BA8" stroke-width="2"/>
+    <text x="796" y="226" fill="#153D4E" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Parallel Workers</text>
+    <text x="796" y="260" fill="#305767" font-family="Segoe UI, Arial, sans-serif" font-size="18">parpool('local') + parfeval</text>
+    <text x="796" y="302" fill="#153D4E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Each worker opens matching bin</text>
+    <text x="796" y="330" fill="#153D4E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- memmapfile creates read-only views</text>
+    <text x="796" y="358" fill="#153D4E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Progress returns via DataQueue</text>
+    <rect x="796" y="382" width="218" height="30" rx="15" fill="#E9F7FC"/>
+    <text x="830" y="402" fill="#24637C" font-family="Consolas, monospace" font-size="14">AllX / AllY / CellStart / CellCount</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1090" y="180" width="240" height="250" rx="24" fill="url(#panelD)" stroke="#7E67AE" stroke-width="2"/>
+    <text x="1116" y="226" fill="#33234E" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">LinkedCell MEX</text>
+    <text x="1116" y="260" fill="#53406F" font-family="Segoe UI, Arial, sans-serif" font-size="18">Sub_JumpingBetweenEachFrame_LinkedCell_mex</text>
+    <text x="1116" y="302" fill="#33234E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Block-hash map selection</text>
+    <text x="1116" y="330" fill="#33234E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- 3 x 3 linked-cell search</text>
+    <text x="1116" y="358" fill="#33234E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Drift + diffusion + adsorption</text>
+    <text x="1116" y="386" fill="#33234E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Returns pos / tr / k</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="160" y="510" width="360" height="220" rx="24" fill="#FBFAF3" stroke="#B49E66" stroke-width="2"/>
+    <text x="188" y="556" fill="#4E3C12" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">03_Distributions</text>
+    <text x="188" y="596" fill="#614D1E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Power law residence time</text>
+    <text x="188" y="624" fill="#614D1E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Exponential residence time</text>
+    <text x="188" y="652" fill="#614D1E" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Uniform residence time</text>
+    <text x="188" y="690" fill="#7A6431" font-family="Consolas, monospace" font-size="14">Sub_GeneratePowerLawWithMean</text>
+    <text x="188" y="712" fill="#7A6431" font-family="Consolas, monospace" font-size="14">Sub_GenerateExponentialWithMean</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="580" y="510" width="360" height="220" rx="24" fill="#F5FBF7" stroke="#6C9A7C" stroke-width="2"/>
+    <text x="608" y="556" fill="#1F4730" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">04_Analysis_Modules</text>
+    <text x="608" y="596" fill="#345F45" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Sub_TrajectoryAnalysis</text>
+    <text x="608" y="624" fill="#345F45" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Smart_Folder_Plot</text>
+    <text x="608" y="652" fill="#345F45" font-family="Segoe UI, Arial, sans-serif" font-size="16">- CDF / track / merge helpers</text>
+    <text x="608" y="690" fill="#426F53" font-family="Segoe UI, Arial, sans-serif" font-size="16">Outputs: PDFs, contour plots, MSD, summary views</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1000" y="510" width="240" height="220" rx="24" fill="#F9F5F0" stroke="#A27E58" stroke-width="2"/>
+    <text x="1026" y="556" fill="#4C3520" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">05_Utils_and_Tests</text>
+    <text x="1026" y="596" fill="#674B31" font-family="Segoe UI, Arial, sans-serif" font-size="16">- Do_Compile_HPC</text>
+    <text x="1026" y="624" fill="#674B31" font-family="Segoe UI, Arial, sans-serif" font-size="16">- killall</text>
+    <text x="1026" y="664" fill="#7B5E42" font-family="Segoe UI, Arial, sans-serif" font-size="16">Compile MEX and reset workers</text>
+  </g>
+
+  <path d="M350 286 H396" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M710 306 H756" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1040 306 H1076" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1210 440 V475 H760 V496" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M340 398 V476" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M910 438 V476 H1120 V496" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1120 620 H954" stroke="#3E5963" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <text x="82" y="802" fill="#3D545C" font-family="Segoe UI, Arial, sans-serif" font-size="18">
+    Key change in latest runtime: linked-cell indices are materialized once as binary payloads, then memory-mapped by workers instead of being broadcast as in-memory constants.
+  </text>
+</svg>
