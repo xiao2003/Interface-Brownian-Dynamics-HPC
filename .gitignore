@@ -1,4 +1,4 @@
-﻿Simulation_Results/
+Simulation_Results/
 Experiment_Logs/
 codegen/
 *.asv
@@ -6,6 +6,6 @@ codegen/
 *.fig
 *.mat
 *.mexw64.bak
+*.rar
 CDF.jpg
 SharedHash_*.bin
-*.asv

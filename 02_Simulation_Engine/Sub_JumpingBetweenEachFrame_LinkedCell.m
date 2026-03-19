@@ -4,6 +4,11 @@ function [xe, ye, Xads, Yads, t_r, Tads_list] = Sub_JumpingBetweenEachFrame_Link
 % Linked-cell + block-hash version (无限容量 & 维度修复版)
 
     coder.inline('always');
+    
+    % =======================================================
+    % 🚨 核心修复：编译器指令必须放在函数最顶层！
+    coder.extrinsic('rng'); 
+    % =======================================================
 
     % ---------------------------
     % 基础初始化与动态内存解锁
@@ -32,9 +37,19 @@ function [xe, ye, Xads, Yads, t_r, Tads_list] = Sub_JumpingBetweenEachFrame_Link
     k        = DataTrans(5);
     jf       = DataTrans(6);
     adR      = DataTrans(7);
+    frame_j  = DataTrans(9);    % 提取当前帧数索引
     vx       = DataTrans(10);
     vy       = DataTrans(11);
     DistMode = DataTrans(12);
+
+    % +++ 【新增：打破克隆魔咒的 RNG 独立播种机】 +++
+    % 仅在仿真的第一帧初始化随机种子，确保每条轨迹的空间路径绝对独立
+    if frame_j == 1
+        % 使用分布模式、时间种子和初始坐标的组合生成全局唯一的伪随机种子
+        unique_seed = uint32(TimeSeed) + uint32(DistMode * 1000) + uint32(abs(x0)*1e5);
+        rng(unique_seed, 'twister');
+    end
+    % +++++++++++++++++++++++++++++++++++++++++++++++++
 
     tjmp   = 1.0 / jf;
     tclock = t_a;
@@ -42,6 +57,10 @@ function [xe, ye, Xads, Yads, t_r, Tads_list] = Sub_JumpingBetweenEachFrame_Link
     PrimeX = int32(73856093);
     PrimeY = int32(19349663);
     adR_sq = adR * adR;
+
+    % ---------------------------
+    % (后面的代码保持你原来的不变即可)
+    % ---------------------------
 
     % ---------------------------
     % 跨帧被困判定 (修复了数组维度不匹配的 Bug)

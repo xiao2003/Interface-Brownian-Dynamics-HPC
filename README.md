@@ -38,6 +38,18 @@
 
 ---
 
+## 最近更新
+
+本次整理后的仓库主线已经同步到最新一批运行与分析脚本，重点包括：
+
+- 合并了最新版 `Sub_JumpingBetweenEachFrame_LinkedCell` 源码与对应 MEX 二进制；
+- 更新了 `Sub_GeneratePowerLawWithMean.m`，增强了不同幂律指数区间下的稳定采样能力；
+- 合并了最新版 `Actual_AdsorptionTime_Filtered.m`，扩展了自动数据寻址和综合分析输出；
+- 新增 `Verify_Figure6.m`，用于验证扩散系数与缺陷间距、平均停留时间之间的标度关系；
+- 清扫了外部临时目录、压缩包与非源码产物，只保留模块化目录中的正式版本。
+
+---
+
 ## 项目架构图
 
 ![Interface Brownian Dynamics HPC Architecture](assets/architecture-overview.png)
@@ -114,6 +126,7 @@
 |-- 05_Utils_and_Tests/
 |   |-- build_linkedcell_mex.m
 |   |-- Do_Compile_HPC.m
+|   |-- Verify_Figure6.m
 |   `-- killall.m
 |-- Archive_Deprecated/
 |   `-- .gitkeep
@@ -163,7 +176,7 @@
 `03_Distributions/` 定义吸附停留时间的随机采样方式：
 
 - `Sub_GeneratePowerLawWithMean.m`
-  幂律停留时间模型，最新版同时处理有限均值、截断幂律等更稳定的采样情况。
+  幂律停留时间模型，最新版同时处理有限均值、截断幂律以及短尾参数区间下的稳定采样情况。
 - `Sub_GenerateExponentialWithMean.m`
   指数分布停留模型，用于表示无记忆吸附过程。
 - `Sub_GenerateUniformWithMean.m`
@@ -186,7 +199,7 @@
 - `Smart_Folder_Plot.m`
   用于批量目录汇总、结果筛选与绘图。
 - `Actual_AdsorptionTime_Filtered.m`
-  用于从保存的 `t_ads_history` 中恢复真实微观吸附时间分布。
+  用于从保存的 `t_ads_history` 中恢复真实微观吸附时间分布，并生成更完整的微观-宏观联合分析图。
 - `CDF.m`
   用于累计分布或分布对照绘图。
 - `track.m`
@@ -200,6 +213,8 @@
   当前主链路 `LinkedCell` MEX 的编译脚本；
 - `Do_Compile_HPC.m`
   较早期静态哈希版 MEX 的编译脚本；
+- `Verify_Figure6.m`
+  用于复现实验标度关系并验证扩散系数与缺陷间距、平均停留时间之间的关系；
 - `killall.m`
   用于清理旧并行池、残留 worker 和相关环境状态。
 
@@ -451,7 +466,7 @@ min_d_sq < adR^2
 
 ### 9.5 真实吸附时间恢复
 
-`Actual_AdsorptionTime_Filtered.m` 是当前版本一个很重要的分析扩展。它不再只依赖理论设定的停留时间分布，而是直接从保存的 `t_ads_history` 中恢复真实实现的微观吸附时间分布，并将其与宏观轨迹和 MSD 结果对应起来。
+`Actual_AdsorptionTime_Filtered.m` 是当前版本一个很重要的分析扩展。它不再只依赖理论设定的停留时间分布，而是直接从保存的 `t_ads_history` 中恢复真实实现的微观吸附时间分布，并将其与宏观轨迹和 MSD 结果对应起来。最新版脚本进一步补充了自动数据寻址、综合全景图输出以及与轨迹时域行为联动的分析流程。
 
 这使项目能够同时比较：
 
@@ -460,6 +475,10 @@ min_d_sq < adR^2
 - 宏观输运量随吸附统计变化的响应。
 
 这对于解释结果和撰写论文都非常关键。
+
+### 9.6 标度关系验证工具
+
+`Verify_Figure6.m` 用于针对最新结果目录自动提取扩散系数，并检验其与缺陷平均间距及平均吸附时间之间的标度关系。该脚本适合用于方法学验证、补充材料制图以及对特定理论关系的快速复现。
 
 ---
 
@@ -568,4 +587,3 @@ Do_Compile_HPC
 - 物理建模价值：能够明确表达吸附、停留、漂移和扩散对输运统计的作用；
 - 工程实现价值：能够以较高效率支撑批量计算与结果归档；
 - 科研应用价值：能够直接服务于论文分析、参数比较、机制解释和结果展示。
-
