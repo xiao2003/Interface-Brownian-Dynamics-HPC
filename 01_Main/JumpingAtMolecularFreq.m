@@ -37,20 +37,22 @@ L_block = 1e4;
 % ======== 核心扫描参数矩阵 ========
 jf_list     = [1e8];          % 跳跃频率扫描
 adR_list    = [1.0];          % 吸附半径扫描
-ds_list     = [10,20,60,100];           % 缺陷平均间距扫描    
+ds_list     = [20];           % 缺陷平均间距扫描    
 
-Repeats = 1:1; 
+Repeats = 1:5; 
 
-DistributionModes = [1,2,3];           %1:幂律 2:指数 3:均匀
+DistributionModes = [1];           %1:幂律 2:指数 3:均匀
 
-TimeIndex_list = [-2.5,2.5];   
+TimeIndex_list = [-1.1,-1.9];   
                 
 Ts_list =[0.02];
 
-tmads_list = [0.0008,0.0032];      
+tmads_list = [0.0010];
+
+IdenticalThermalNoise = false;
     
 % --- 漂移速度与扩散步长的比例系数扫描 ---
-Vx_ratio_list = [0];
+Vx_ratio_list = [0,1e-07,1e-06,1e-05,0.0001,0.0003,0.0007,0.001,0.002,0.003,0.005,0.007,0.01,0.04,0.07,0.10,0.30,0.50];
 Vy_ratio_list = [0];  
    
 if ispc 
@@ -63,7 +65,7 @@ if ispc
     start(memProfiler);
 end
 
-%% --- [3] 预生成缺陷地图阵列与 Linked-Cell 索引表（测试版） ---
+%% --- [3] 预生成缺陷地图阵列与 Linked-Cell 索引表 ---
 fprintf('>>> [%s] 正在预生成基础缺陷区块与 Linked-Cell 索引表...\n', datestr(now, 'HH:MM:SS'));
 
 cell_size = 100;
@@ -247,7 +249,7 @@ fprintf('------------------------------------------------------------\n');
 
 for i = 1:TotalTasks
     futures(i) = parfeval(pool, @Worker_JumpingTask, 1, i, dq, Tasks(i,:), ...
-        t_total, D, TimeSeed, L_block, cell_size, nx, ny);
+        t_total, D, TimeSeed, L_block, cell_size, nx, ny, IdenticalThermalNoise);
 end
 
 %% --- [5] 结果异步回收与智能归档  ---
@@ -437,13 +439,15 @@ end
 % =========================================================================
 % Worker: 独立运算核心 
 % =========================================================================
-function out = Worker_JumpingTask(taskID, dq, p, t_tot, D, TimeSeed, L_block, cell_size, nx, ny)
+function out = Worker_JumpingTask(taskID, dq, p, t_tot, D, TimeSeed, L_block, cell_size, nx, ny, IdenticalThermalNoise)
     Ts       = p(1); 
     tm_ads   = p(2); 
     TI       = p(3);
     vx_ratio = p(4);
     vy_ratio = p(5); 
     DistMode = p(6); 
+
+
     Rep      = p(7);
     x0       = p(8); 
     y0       = p(9);
@@ -488,7 +492,12 @@ function out = Worker_JumpingTask(taskID, dq, p, t_tot, D, TimeSeed, L_block, ce
     cursor = 0; 
     
     for j = 1:nf
-        args = [Ts, TI, tr, tm_ads, k, jf, adR, 0, j, vx, vy, DistMode];
+        if IdenticalThermalNoise
+            noise_flag = 0;      % 传入 0 代表全网同源序列
+        else
+            noise_flag = taskID; % 传入唯一的 taskID 代表独立序列
+        end
+        args = [Ts, TI, tr, tm_ads, k, jf, adR, noise_flag, j, vx, vy, DistMode];
         
         % 接收真实的 Tads 数组输出
         [xe, ye, Xa_frame, Ya_frame, tr, Ta_frame] = Sub_JumpingBetweenEachFrame_LinkedCell_mex( ...

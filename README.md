@@ -12,6 +12,8 @@
 
 当前仓库的默认运行路径采用 `LinkedCell + block-hash + SharedHash_*.bin + memmapfile + MEX + parfeval` 架构。该实现的目标是降低大规模扫描中的局域搜索开销和并行内存压力，同时保留显式缺陷场和停留时间统计对输运行为的影响。
 
+当前主程序还提供热噪声序列控制开关，可在不同任务间切换“统一热噪声序列”与“独立热噪声序列”，用于区分漂移项、停留时间分布与随机热扰动对统计结果的贡献。
+
 ---
 
 ## 项目用途
@@ -107,6 +109,9 @@ Do_Compile_HPC
 |-- 04_Analysis_Modules/
 |   |-- Actual_AdsorptionTime_Filtered.m
 |   |-- CDF.m
+|   |-- Plot_Alpha_vs_Ratio.m
+|   |-- Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m
+|   |-- Scientific_Master_Plot.m
 |   |-- Smart_Folder_Plot.m
 |   |-- Sub_JumpingAnalysis.m
 |   |-- Sub_MergingLocalizationsInSameFrame.m
@@ -184,6 +189,12 @@ Do_Compile_HPC
   从 `t_ads_history` 恢复真实吸附时间分布。
 - `CDF.m`
   用于分布对照绘图。
+- `Plot_Alpha_vs_Ratio.m`
+  计算并绘制输运不对称指数与 `ratio` 的关系。
+- `Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m`
+  汇总输出条件不对称性、中心峰占比、吸附时间 CCDF 和有效输运不对称性。
+- `Scientific_Master_Plot.m`
+  独立的综合分析入口，用于批量读取结果目录并生成论文风格图像。
 - `track.m`
   用于轨迹追踪和可视化。
 
@@ -279,6 +290,15 @@ min_d_sq < adR^2
 
 这样每一步只需检查局部相邻网格，而不需要对全部缺陷点做全局搜索。
 
+### 热噪声序列控制
+
+当前主链路在任务级别引入了 `IdenticalThermalNoise` 开关：
+
+- 当开关为 `true` 时，不同任务在首帧使用相同主种子，便于比较参数变化本身造成的差异；
+- 当开关为 `false` 时，每个任务会基于 `taskID` 派生独立种子，避免不同任务共享同一热噪声轨迹。
+
+这一设计不改变物理模型本身，但会影响对照实验的可比性和统计独立性，因此在分析结果时需要一并记录。
+
 ### 二进制索引与 `memmapfile`
 
 构建好的索引会写入 `SharedHash_Rep*_ds*_adR*.bin` 文件。worker 运行时通过 `memmapfile` 读取索引数据，再交给 MEX 使用。
@@ -313,9 +333,17 @@ min_d_sq < adR^2
 - [Sub_TrajectoryAnalysis.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Sub_TrajectoryAnalysis.m)
 - [Smart_Folder_Plot.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Smart_Folder_Plot.m)
 - [Actual_AdsorptionTime_Filtered.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Actual_AdsorptionTime_Filtered.m)
+- [Scientific_Master_Plot.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Scientific_Master_Plot.m)
+- [Plot_Alpha_vs_Ratio.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Plot_Alpha_vs_Ratio.m)
+- [Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m)
 - [Verify_Figure6.m](C:\Users\Administrator\Desktop\GithubHPC\05_Utils_and_Tests\Verify_Figure6.m)
 
-其中前两者更偏向结果整理，后两者更偏向物理解释和标度验证。
+其中：
+
+- `Sub_TrajectoryAnalysis.m` 和 `Smart_Folder_Plot.m` 负责常规批处理分析；
+- `Scientific_Master_Plot.m` 适合快速汇总多组目录并生成统一风格图件；
+- `Plot_Alpha_vs_Ratio*.m` 侧重输运不对称性及相关指标；
+- `Actual_AdsorptionTime_Filtered.m` 与 `Verify_Figure6.m` 更偏向物理解释和标度验证。
 
 ---
 
@@ -323,11 +351,14 @@ min_d_sq < adR^2
 
 当前仓库已经同步到最新一批运行与分析脚本，主要包括：
 
+- 更新了 `JumpingAtMolecularFreq.m`，加入任务级热噪声序列控制和新的 `Vx_ratio` 扫描配置；
 - 更新了 `Sub_JumpingBetweenEachFrame_LinkedCell` 源码与对应 MEX；
 - 更新了 `Sub_GeneratePowerLawWithMean.m` 的幂律采样逻辑；
-- 合并了最新版 `Actual_AdsorptionTime_Filtered.m`；
+- 合并了最新版 `Smart_Folder_Plot.m`；
+- 新增 `Scientific_Master_Plot.m`；
+- 新增 `Plot_Alpha_vs_Ratio.m` 与 `Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m`；
 - 新增 `Verify_Figure6.m`；
-- 清理了临时外部目录、压缩包和非源码产物。
+- 清理了根目录散落副本、临时输出文件和非源码产物。
 
 ---
 

@@ -1,15 +1,9 @@
 function [xe, ye, Xads, Yads, t_r, Tads_list] = Sub_JumpingBetweenEachFrame_LinkedCell( ...
     x0, y0, AllX, AllY, CellStart, CellCount, DataTrans, TimeSeed, ...
     L_block, cell_size, nx_i, ny_i)
-% Linked-cell + block-hash version (无限容量 & 维度修复版)
 
     coder.inline('always');
     
-    % =======================================================
-    % 🚨 核心修复：编译器指令必须放在函数最顶层！
-    coder.extrinsic('rng'); 
-    % =======================================================
-
     % ---------------------------
     % 基础初始化与动态内存解锁
     % ---------------------------
@@ -37,19 +31,25 @@ function [xe, ye, Xads, Yads, t_r, Tads_list] = Sub_JumpingBetweenEachFrame_Link
     k        = DataTrans(5);
     jf       = DataTrans(6);
     adR      = DataTrans(7);
-    frame_j  = DataTrans(9);    % 提取当前帧数索引
+    noise_flag = DataTrans(8);
+    frame_j  = DataTrans(9);  
     vx       = DataTrans(10);
     vy       = DataTrans(11);
     DistMode = DataTrans(12);
 
-    % +++ 【新增：打破克隆魔咒的 RNG 独立播种机】 +++
-    % 仅在仿真的第一帧初始化随机种子，确保每条轨迹的空间路径绝对独立
     if frame_j == 1
-        % 使用分布模式、时间种子和初始坐标的组合生成全局唯一的伪随机种子
-        unique_seed = uint32(TimeSeed) + uint32(DistMode * 1000) + uint32(abs(x0)*1e5);
-        rng(unique_seed, 'twister');
+        if noise_flag == 0
+            % 【模式 1：控制变量（相同序列）】
+            % 所有独立任务使用绝对一样的基础种子
+            rng(uint32(TimeSeed), 'twister');
+        else
+            % 【模式 2：真随机（独立序列）】
+            % 将主种子与唯一的 noise_flag (即 taskID) 乘上质数后深度绑定
+            % 保证成百上千个并行任务拥有绝对独立且不重合的底噪
+            unique_seed = uint32(TimeSeed) + uint32(noise_flag * 19349663); 
+            rng(unique_seed, 'twister');
+        end
     end
-    % +++++++++++++++++++++++++++++++++++++++++++++++++
 
     tjmp   = 1.0 / jf;
     tclock = t_a;
