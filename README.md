@@ -102,7 +102,7 @@ build_linkedcell_mex
 |   |-- Actual_AdsorptionTime_Filtered.m
 |   |-- CDF.m
 |   |-- Plot_Alpha_vs_Ratio.m
-|   |-- Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m
+|   |-- Plot_Alpha_vs_Ratio_AllMetrics_SavePDF.m
 |   |-- Scientific_Master_Plot.m
 |   |-- Smart_Folder_Plot.m
 |   |-- Sub_JumpingAnalysis.m
@@ -176,8 +176,8 @@ build_linkedcell_mex
   用于分布对照绘图。
 - `Plot_Alpha_vs_Ratio.m`
   计算并绘制输运不对称指数与 `ratio` 的关系。
-- `Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m`
-  汇总输出条件不对称性、中心峰占比、吸附时间 CCDF 和有效输运不对称性。
+- `Plot_Alpha_vs_Ratio_AllMetrics_SavePDF.m`
+  汇总输出条件不对称性、中心峰占比、吸附时间 PDF 和有效输运不对称性。
 - `Scientific_Master_Plot.m`
   独立的综合分析入口，用于批量读取结果目录并生成论文风格图像。
 - `track.m`
@@ -318,7 +318,7 @@ min_d_sq < adR^2
 - [Actual_AdsorptionTime_Filtered.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Actual_AdsorptionTime_Filtered.m)
 - [Scientific_Master_Plot.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Scientific_Master_Plot.m)
 - [Plot_Alpha_vs_Ratio.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Plot_Alpha_vs_Ratio.m)
-- [Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m)
+- [Plot_Alpha_vs_Ratio_AllMetrics_SavePDF.m](C:\Users\Administrator\Desktop\GithubHPC\04_Analysis_Modules\Plot_Alpha_vs_Ratio_AllMetrics_SavePDF.m)
 - [Verify_Figure6.m](C:\Users\Administrator\Desktop\GithubHPC\05_Utils_and_Tests\Verify_Figure6.m)
 
 其中：
@@ -339,7 +339,7 @@ min_d_sq < adR^2
 - 更新了 `Sub_GeneratePowerLawWithMean.m` 的幂律采样逻辑；
 - 合并了最新版 `Smart_Folder_Plot.m`；
 - 新增 `Scientific_Master_Plot.m`；
-- 新增 `Plot_Alpha_vs_Ratio.m` 与 `Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF.m`；
+- 新增 `Plot_Alpha_vs_Ratio.m` 与 `Plot_Alpha_vs_Ratio_AllMetrics_SavePDF.m`；
 - 新增 `Verify_Figure6.m`；
 - 清理了根目录散落副本、临时输出文件和非源码产物。
 

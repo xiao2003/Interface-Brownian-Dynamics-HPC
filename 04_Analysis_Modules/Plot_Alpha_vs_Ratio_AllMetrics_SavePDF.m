@@ -1,53 +1,58 @@
-function Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF()
+function Plot_Alpha_vs_Ratio_AllMetrics_SavePDF()
 % =========================================================================
-% Plot_Alpha_vs_Ratio_AllMetrics_SaveCCDF
-% -------------------------------------------------------------------------
-% 四宫格：
+% 4-panel analysis:
 %   (a) Conditional Asymmetry
 %   (b) Central-Peak / Stagnation Fraction
-%   (c) Adsorption-Time CCDF / Survival Curve   <-- 新版本左下角
+%   (c) Adsorption-Time PDF (true density)
 %   (d) Effective Transport Asymmetry
 %
-% 自动保存：
-%   Combined_Panel.fig/.jpg
-%   Conditional_Asymmetry.fig/.jpg
-%   Central_Peak_Stagnation.fig/.jpg
-%   Adsorption_Time_CCDF.fig/.jpg
-%   Effective_Transport_Asymmetry.fig/.jpg
-%   Raw_Metrics.mat
-%
-% 说明：
-%   - 优先读取 analysis 文件夹
-%   - 若无 analysis，则自动跳转到最新 Simulation_Results/Task_*
-%   - 保持你原来 ratio -> n_vis 的处理逻辑
+% Key updates:
+%   1) Panel 3 uses true PDF: counts / (N * bin_width)
+%   2) Panel 3 style is unified with the other panels
+%   3) Legend appears only in panel 1 (upper-left)
+%   4) No legend(tiledlayout, ...) call
 % =========================================================================
-clc; clear; close all;
 
-%% ========================= 1. 参数配置 =========================
+clc;
+clear;
+close all;
+
+%% ========================================================================
+% 1. User settings
+% =========================================================================
 ControlVars = {'Tads0.0010_', 'adR1_', 'DS20_'};
 
-DistModes   = { ...
+DistModes = { ...
     'PowerLaw_TI-2.5', ...
     'PowerLaw_TI-1.9', ...
     'PowerLaw_TI-1.5', ...
     'PowerLaw_TI-1.1', ...
     'PowerLaw_TI-0.9', ...
     'PowerLaw_TI-0.5', ...
-    'PowerLaw_TI0.5',  ...
-    'PowerLaw_TI1.5',  ...
-    'PowerLaw_TI2.5',  ...
+    'PowerLaw_TI0.5', ...
+    'PowerLaw_TI1.5', ...
+    'PowerLaw_TI2.5', ...
     'Exp', ...
     'Uniform'};
 
-Colors = lines(length(DistModes));
-Marker_Size = 80;
-LineWidth_Base = 2.2;
+Colors = lines(numel(DistModes));
+Marker_Size    = 70;
+LineWidth_Base = 2.4;
 
-DeltaFactor   = 1.0;   % delta = DeltaFactor * adR
-MinTotalCount = 1;     % 稀疏点不丢
-D_val         = 1e-10; % 与主程序一致
+DeltaFactor   = 1.0;
+MinTotalCount = 1;
+D_val         = 1e-10;
 
-%% ========================= 2. 自动定位数据源 =========================
+% ---- Panel 3 PDF settings ----
+PDF_GridN       = 50;      % recommended: 40-60
+PDF_Q_Low       = 0.001;
+PDF_Q_High      = 0.999;
+UseRelativeTime = true;    % recommended: true
+PDF_MinPositive = 1e-8;
+
+%% ========================================================================
+% 2. Locate data source
+% =========================================================================
 baseResultDir = fullfile(pwd, 'Simulation_Results');
 Target_Dir    = fullfile(pwd, 'analysis');
 
@@ -56,66 +61,69 @@ if ~exist(Target_Dir, 'dir') && exist(baseResultDir, 'dir')
     if ~isempty(taskDirs)
         [~, idx] = max([taskDirs.datenum]);
         Target_Dir = fullfile(baseResultDir, taskDirs(idx).name);
-        fprintf('>>> 未找到 analysis 文件夹，已重定向到最新数据: %s\n', taskDirs(idx).name);
+        fprintf('>>> analysis folder not found. Redirected to latest Task_*: %s\n', taskDirs(idx).name);
     end
 end
 
 if ~exist(Target_Dir, 'dir')
-    error('找不到数据文件夹！请确保当前目录下存在 analysis 文件夹，或 Simulation_Results 存在 Task_* 文件夹。');
+    error('Cannot find data folder. Expected analysis or Simulation_Results/Task_*');
 end
 
-fprintf('>>> 读取数据集目录: %s\n', Target_Dir);
+fprintf('>>> Reading dataset directory: %s\n', Target_Dir);
 
 all_items  = dir(Target_Dir);
 subfolders = all_items([all_items.isdir] & ~ismember({all_items.name}, {'.','..'}));
 
-%% ========================= 3. 初始化数据容器 =========================
+%% ========================================================================
+% 3. Initialize data containers
+% =========================================================================
 MetricNames = {'xi_cond', 'phi0', 'xi_eff'};
 
 AllMetricData = struct();
-AdsCCDFData   = struct();
+AdsPDFData    = struct();
 
 for m = 1:numel(MetricNames)
     metric_name = MetricNames{m};
-    for i = 1:length(DistModes)
+    for i = 1:numel(DistModes)
         dist_name = matlab.lang.makeValidName(DistModes{i});
         AllMetricData.(metric_name).(dist_name).X = [];
         AllMetricData.(metric_name).(dist_name).Y = [];
     end
 end
 
-for i = 1:length(DistModes)
+for i = 1:numel(DistModes)
     dist_name = matlab.lang.makeValidName(DistModes{i});
-    AdsCCDFData.(dist_name).tau_ads = [];
+    AdsPDFData.(dist_name).tau_ads = [];
 end
 
 global_zero_mapped_val = 1e-8;
 
-%% ========================= 4. 核心提取循环 =========================
-for i = 1:length(DistModes)
+%% ========================================================================
+% 4. Core extraction loop
+% =========================================================================
+for i = 1:numel(DistModes)
     current_dist = DistModes{i};
-    fprintf('[+] 正在分析分布模式: %s\n', current_dist);
+    fprintf('[+] Processing distribution mode: %s\n', current_dist);
 
-    match_mask = true(1, length(subfolders));
-    for c = 1:length(ControlVars)
+    match_mask = true(1, numel(subfolders));
+    for c = 1:numel(ControlVars)
         match_mask = match_mask & contains({subfolders.name}, ControlVars{c});
     end
     match_mask = match_mask & contains({subfolders.name}, current_dist);
     matching_folders = subfolders(match_mask);
 
     if isempty(matching_folders)
-        fprintf('    -> 无匹配文件夹。\n');
+        fprintf('    -> No matching folders.\n');
         continue;
     end
 
     Ratio_DataMap = containers.Map('KeyType', 'double', 'ValueType', 'any');
     Ads_DataMap   = containers.Map('KeyType', 'double', 'ValueType', 'any');
 
-    for f = 1:length(matching_folders)
+    for f = 1:numel(matching_folders)
         folder_name = matching_folders(f).name;
         folder_path = fullfile(Target_Dir, folder_name);
 
-        % ===== 保持你原来的 regexp 解析方式 =====
         tokens_n    = regexp(folder_name, 'ratio_([0-9\.eE\-]+)k', 'tokens');
         if isempty(tokens_n), continue; end
         n_val = str2double(tokens_n{1}{1});
@@ -132,7 +140,6 @@ for i = 1:length(DistModes)
         if ~isempty(tokens_Ts),   Ts_val   = str2double(tokens_Ts{1}{1});   else, Ts_val   = 0.02;  end
         if ~isempty(tokens_Tads), Tads_val = str2double(tokens_Tads{1}{1}); else, Tads_val = 0.001; end
 
-        % ===== 保持你原来的 n_vis 逻辑 =====
         k_nm   = sqrt(2 * D_val / jf_val) * 1e9;
         n_geo  = (adR_val * k_nm) / (ds_val^2);
         t_free = (ds_val * 1e-9)^2 / (4 * D_val);
@@ -158,10 +165,9 @@ for i = 1:length(DistModes)
         dx_temp   = [];
         tau_temp  = [];
 
-        for rep_f = 1:length(mat_files)
+        for rep_f = 1:numel(mat_files)
             file_path = fullfile(folder_path, mat_files(rep_f).name);
 
-            % ---------- positionlist ----------
             try
                 data = load(file_path);
             catch
@@ -172,8 +178,8 @@ for i = 1:length(DistModes)
                 pos = data.positionlist;
                 frames = double(pos(:,3));
 
-                [~, ~, idx] = unique(frames);
-                mean_X = accumarray(idx, pos(:,1)) ./ accumarray(idx, 1);
+                [~, ~, idxFrame] = unique(frames);
+                mean_X = accumarray(idxFrame, pos(:,1)) ./ accumarray(idxFrame, 1);
 
                 if numel(mean_X) >= 2
                     dx_now = mean_X(2:end) - mean_X(1:end-1);
@@ -181,8 +187,6 @@ for i = 1:length(DistModes)
                 end
             end
 
-            % ---------- 吸附时间历史 ----------
-            % 尽量兼容你可能用过的变量名
             if isfield(data, 't_ads_history')
                 tau_here = data.t_ads_history(:);
             elseif isfield(data, 't_ads')
@@ -230,8 +234,7 @@ for i = 1:length(DistModes)
 
     dist_key = matlab.lang.makeValidName(current_dist);
 
-    % ===== 计算三个主指标 =====
-    for r = 1:length(unique_ratios)
+    for r = 1:numel(unique_ratios)
         scaled_X = unique_ratios(r);
         dx_v = Ratio_DataMap(scaled_X);
         dx_v = dx_v(isfinite(dx_v));
@@ -259,7 +262,7 @@ for i = 1:length(DistModes)
         AllMetricData.xi_eff.(dist_key).Y(end+1) = xi_eff;
     end
 
-    % ===== 左下角：取 scaled_X 最接近 1 的吸附时间样本 =====
+    % choose tau_ads sample closest to n/n_vis ~= 1 for panel 3
     ads_keys = cell2mat(keys(Ads_DataMap));
     ads_keys = ads_keys(isfinite(ads_keys) & ads_keys > 0);
 
@@ -268,14 +271,17 @@ for i = 1:length(DistModes)
         best_key = ads_keys(idx_best);
         tau_ads = Ads_DataMap(best_key);
         tau_ads = tau_ads(isfinite(tau_ads) & tau_ads > 0);
-        AdsCCDFData.(dist_key).tau_ads = tau_ads;
+        AdsPDFData.(dist_key).tau_ads = tau_ads;
     end
 end
 
-%% ========================= 5. 自动建保存文件夹 =========================
+%% ========================================================================
+% 5. Build save folder
+% =========================================================================
 ctrl_str = strjoin(ControlVars, '_');
-inv_str  = 'AllMetrics_AdsCCDF';
+inv_str  = 'AllMetrics_AdsPDF_Clean';
 folderName = sprintf('[%s][%s]', ctrl_str, inv_str);
+
 if length(folderName) > 150
     folderName = [folderName(1:145), '...]'];
 end
@@ -286,73 +292,105 @@ if ~exist(saveDir, 'dir')
     mkdir(saveDir);
 end
 
-%% ========================= 6. 画综合四宫格 =========================
-fig_combo = figure('Name', 'Combined_Panel', 'Position', [60, 40, 1700, 1000], 'Color', 'w');
+%% ========================================================================
+% 6. Draw combined panel
+% =========================================================================
+fig_combo = figure('Name', 'Combined_Panel', ...
+                   'Position', [40, 20, 2200, 1300], ...
+                   'Color', 'w');
+
 tlo = tiledlayout(2,2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-% ---------------- (a) Conditional Asymmetry ----------------
-ax1 = nexttile(tlo, 1); hold(ax1, 'on'); box(ax1, 'on');
-plot_mastercurve(ax1, AllMetricData.xi_cond, DistModes, Colors, Marker_Size, LineWidth_Base);
-set(ax1, 'XScale', 'log', 'FontSize', 14, 'LineWidth', 1.5, 'TickDir', 'in');
-xlabel(ax1, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 16, 'FontWeight', 'bold');
-ylabel(ax1, 'Conditional Asymmetry  \xi_{cond}', 'FontSize', 16, 'FontWeight', 'bold');
-title(ax1, 'Conditional Asymmetry', 'FontSize', 16, 'FontWeight', 'bold');
+% ---- (a) Conditional Asymmetry ----
+ax1 = nexttile(tlo, 1);
+hold(ax1, 'on'); box(ax1, 'on');
+[legendHandles, legendLabels] = plot_mastercurve(ax1, AllMetricData.xi_cond, DistModes, Colors, Marker_Size, LineWidth_Base, true);
+set(ax1, 'XScale', 'log', 'FontSize', 16, 'LineWidth', 1.6, 'TickDir', 'in');
+xlabel(ax1, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 18, 'FontWeight', 'bold');
+ylabel(ax1, '\xi_{cond}', 'FontSize', 18, 'FontWeight', 'bold');
+title(ax1, 'Conditional Asymmetry', 'FontSize', 18, 'FontWeight', 'bold');
 apply_axis_decor(ax1, global_zero_mapped_val, false);
 
-% ---------------- (b) Stagnation Fraction ----------------
-ax2 = nexttile(tlo, 2); hold(ax2, 'on'); box(ax2, 'on');
-plot_mastercurve(ax2, AllMetricData.phi0, DistModes, Colors, Marker_Size, LineWidth_Base);
-set(ax2, 'XScale', 'log', 'FontSize', 14, 'LineWidth', 1.5, 'TickDir', 'in');
-xlabel(ax2, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 16, 'FontWeight', 'bold');
-ylabel(ax2, 'Stagnation Index  \phi_0', 'FontSize', 16, 'FontWeight', 'bold');
-title(ax2, 'Central-Peak / Stagnation Fraction', 'FontSize', 16, 'FontWeight', 'bold');
+% only panel-1 legend
+legend(ax1, legendHandles, legendLabels, ...
+    'Location', 'northwest', ...
+    'FontSize', 10, ...
+    'Interpreter', 'none', ...
+    'Box', 'off');
+
+% ---- (b) Stagnation Fraction ----
+ax2 = nexttile(tlo, 2);
+hold(ax2, 'on'); box(ax2, 'on');
+plot_mastercurve(ax2, AllMetricData.phi0, DistModes, Colors, Marker_Size, LineWidth_Base, false);
+set(ax2, 'XScale', 'log', 'FontSize', 16, 'LineWidth', 1.6, 'TickDir', 'in');
+xlabel(ax2, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 18, 'FontWeight', 'bold');
+ylabel(ax2, '\phi_0', 'FontSize', 18, 'FontWeight', 'bold');
+title(ax2, 'Central-Peak / Stagnation Fraction', 'FontSize', 18, 'FontWeight', 'bold');
 apply_axis_decor(ax2, global_zero_mapped_val, true);
 
-% ---------------- (c) Adsorption-Time CCDF ----------------
-ax3 = nexttile(tlo, 3); hold(ax3, 'on'); box(ax3, 'on');
-plot_adsorption_ccdf(ax3, AdsCCDFData, DistModes, Colors, Marker_Size, LineWidth_Base);
-set(ax3, 'XScale', 'log', 'YScale', 'log', 'FontSize', 14, 'LineWidth', 1.5, 'TickDir', 'in');
-xlabel(ax3, 'Adsorption Time  \tau_{ads} (s)', 'FontSize', 16, 'FontWeight', 'bold');
-ylabel(ax3, 'CCDF  P(\tau_{ads} > t)', 'FontSize', 16, 'FontWeight', 'bold');
-title(ax3, 'Adsorption-Time Survival Curve  (closest to n/n_{vis}\approx 1)', 'FontSize', 16, 'FontWeight', 'bold');
+% ---- (c) Adsorption-Time PDF ----
+ax3 = nexttile(tlo, 3);
+hold(ax3, 'on'); box(ax3, 'on');
+plot_adsorption_pdf_true(ax3, AdsPDFData, DistModes, Colors, Marker_Size, LineWidth_Base, ...
+    PDF_GridN, PDF_Q_Low, PDF_Q_High, UseRelativeTime, PDF_MinPositive);
+set(ax3, 'XScale', 'log', 'YScale', 'log', 'FontSize', 16, 'LineWidth', 1.6, 'TickDir', 'in');
+
+if UseRelativeTime
+    xlabel(ax3, '\tau_{ads} / \tau_{50}', 'FontSize', 18, 'FontWeight', 'bold');
+else
+    xlabel(ax3, 'Adsorption Time  \tau_{ads} (s)', 'FontSize', 18, 'FontWeight', 'bold');
+end
+
+ylabel(ax3, 'PDF', 'FontSize', 18, 'FontWeight', 'bold');
+title(ax3, 'Adsorption-Time Probability Density', 'FontSize', 18, 'FontWeight', 'bold');
 grid(ax3, 'on');
 
-% ---------------- (d) Effective Transport Asymmetry ----------------
-ax4 = nexttile(tlo, 4); hold(ax4, 'on'); box(ax4, 'on');
-plot_mastercurve(ax4, AllMetricData.xi_eff, DistModes, Colors, Marker_Size, LineWidth_Base);
-set(ax4, 'XScale', 'log', 'FontSize', 14, 'LineWidth', 1.5, 'TickDir', 'in');
-xlabel(ax4, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 16, 'FontWeight', 'bold');
-ylabel(ax4, 'Effective Transport Index  \Xi_{eff}', 'FontSize', 16, 'FontWeight', 'bold');
-title(ax4, 'Effective Transport Asymmetry', 'FontSize', 16, 'FontWeight', 'bold');
+% ---- (d) Effective Transport Asymmetry ----
+ax4 = nexttile(tlo, 4);
+hold(ax4, 'on'); box(ax4, 'on');
+plot_mastercurve(ax4, AllMetricData.xi_eff, DistModes, Colors, Marker_Size, LineWidth_Base, false);
+set(ax4, 'XScale', 'log', 'FontSize', 16, 'LineWidth', 1.6, 'TickDir', 'in');
+xlabel(ax4, 'Normalized Driving Force  n / n_{vis}', 'FontSize', 18, 'FontWeight', 'bold');
+ylabel(ax4, '\Xi_{eff}', 'FontSize', 18, 'FontWeight', 'bold');
+title(ax4, 'Effective Transport Asymmetry', 'FontSize', 18, 'FontWeight', 'bold');
 apply_axis_decor(ax4, global_zero_mapped_val, false);
 
-%% ========================= 7. 自动保存 =========================
+%% ========================================================================
+% 7. Save outputs
+% =========================================================================
 save_one_figure(fig_combo, saveDir, 'Combined_Panel');
-
 save_axis_as_figure(ax1, saveDir, 'Conditional_Asymmetry');
 save_axis_as_figure(ax2, saveDir, 'Central_Peak_Stagnation');
-save_axis_as_figure(ax3, saveDir, 'Adsorption_Time_CCDF');
+save_axis_as_figure(ax3, saveDir, 'Adsorption_Time_PDF');
 save_axis_as_figure(ax4, saveDir, 'Effective_Transport_Asymmetry');
 
 save(fullfile(saveDir, 'Raw_Metrics.mat'), ...
-    'AllMetricData', 'AdsCCDFData', 'ControlVars', 'DistModes');
+    'AllMetricData', 'AdsPDFData', 'ControlVars', 'DistModes');
 
-fprintf('>>> 全部图像已自动保存至: %s\n', saveDir);
+fprintf('>>> All figures saved to: %s\n', saveDir);
 
 end
 
-%% =========================================================================
+%% ========================================================================
 function [xi_cond, phi0, xi_eff] = compute_main_metrics(dx_v, delta_nm)
 
 dx_v = dx_v(:);
 dx_v = dx_v(isfinite(dx_v));
 
-% 1) Conditional Asymmetry
 dx_R = dx_v(dx_v > 0);
 dx_L = dx_v(dx_v < 0);
 
-if isempty(dx_R), M_R = 0; else, M_R = mean(dx_R); end
-if isempty(dx_L), M_L = 0; else, M_L = abs(mean(dx_L)); end
+if isempty(dx_R)
+    M_R = 0;
+else
+    M_R = mean(dx_R);
+end
+
+if isempty(dx_L)
+    M_L = 0;
+else
+    M_L = abs(mean(dx_L));
+end
 
 if M_R == 0 && M_L == 0
     xi_cond = 0;
@@ -360,10 +398,8 @@ else
     xi_cond = (M_R - M_L) / max(M_R, M_L);
 end
 
-% 2) Stagnation fraction
 phi0 = mean(abs(dx_v) <= delta_nm);
 
-% 3) Effective transport
 dx_mov = dx_v(abs(dx_v) > delta_nm);
 if isempty(dx_mov)
     xi_move = 0;
@@ -371,8 +407,17 @@ else
     dx_Rm = dx_mov(dx_mov > 0);
     dx_Lm = dx_mov(dx_mov < 0);
 
-    if isempty(dx_Rm), M_Rm = 0; else, M_Rm = mean(dx_Rm); end
-    if isempty(dx_Lm), M_Lm = 0; else, M_Lm = abs(mean(dx_Lm)); end
+    if isempty(dx_Rm)
+        M_Rm = 0;
+    else
+        M_Rm = mean(dx_Rm);
+    end
+
+    if isempty(dx_Lm)
+        M_Lm = 0;
+    else
+        M_Lm = abs(mean(dx_Lm));
+    end
 
     if M_Rm == 0 && M_Lm == 0
         xi_move = 0;
@@ -382,24 +427,31 @@ else
 end
 
 xi_eff = (1 - phi0) * xi_move;
+
 end
 
-%% =========================================================================
-function plot_mastercurve(ax, MetricStruct, DistModes, Colors, Marker_Size, LineWidth_Base)
+%% ========================================================================
+function [handles, labels] = plot_mastercurve(ax, MetricStruct, DistModes, Colors, Marker_Size, LineWidth_Base, returnHandles)
+
+if nargin < 7
+    returnHandles = false;
+end
 
 Markers = {'o','s','d','^','v','p','h','*','>','<','x'};
-Legend_Handles = [];
-Legend_Labels  = {};
+handles = gobjects(0);
+labels  = {};
 
 maxX_local = 1;
 global_zero_tick = inf;
 
-for i = 1:length(DistModes)
+for i = 1:numel(DistModes)
     dist_key = matlab.lang.makeValidName(DistModes{i});
     X = MetricStruct.(dist_key).X;
     Y = MetricStruct.(dist_key).Y;
 
-    if isempty(X), continue; end
+    if isempty(X)
+        continue;
+    end
 
     [Xuniq, ~, ic] = unique(X);
     Yavg = accumarray(ic(:), Y(:), [], @mean);
@@ -414,15 +466,16 @@ for i = 1:length(DistModes)
         'Color', Colors(i,:), ...
         'LineWidth', LineWidth_Base, ...
         'Marker', Markers{mod(i-1, numel(Markers))+1}, ...
+        'MarkerIndices', 1:2:max(1, numel(Xuniq)), ...
         'MarkerSize', Marker_Size/10, ...
         'MarkerFaceColor', 'w', ...
         'MarkerEdgeColor', Colors(i,:));
 
-    Legend_Handles = [Legend_Handles, h]; %#ok<AGROW>
-    Legend_Labels{end+1} = strrep(DistModes{i}, '_', ' '); %#ok<AGROW>
+    if returnHandles
+        handles(end+1) = h; %#ok<AGROW>
+        labels{end+1} = strrep(DistModes{i}, '_', ' '); %#ok<AGROW>
+    end
 end
-
-legend(ax, Legend_Handles, Legend_Labels, 'Location', 'northwest', 'FontSize', 8, 'Box', 'off');
 
 if isfinite(global_zero_tick)
     ax.XLim = [global_zero_tick/2, maxX_local*2];
@@ -430,57 +483,141 @@ end
 
 grid(ax, 'on');
 set(ax, 'GridAlpha', 0.15);
+
 end
 
-%% =========================================================================
-function plot_adsorption_ccdf(ax, AdsCCDFData, DistModes, Colors, Marker_Size, LineWidth_Base)
+%% ========================================================================
+function plot_adsorption_pdf_true(ax, AdsPDFData, DistModes, Colors, Marker_Size, LineWidth_Base, ...
+    GridN, qLow, qHigh, UseRelativeTime, PDF_MinPositive)
 
 Markers = {'o','s','d','^','v','p','h','*','>','<','x'};
-Legend_Handles = [];
-Legend_Labels  = {};
 
-for i = 1:length(DistModes)
+all_min = [];
+all_max = [];
+
+% determine global x-range
+for i = 1:numel(DistModes)
     dist_key = matlab.lang.makeValidName(DistModes{i});
-    tau_ads = AdsCCDFData.(dist_key).tau_ads;
+    tau_ads = AdsPDFData.(dist_key).tau_ads;
     tau_ads = tau_ads(isfinite(tau_ads) & tau_ads > 0);
 
-    if numel(tau_ads) < 3
+    if isempty(tau_ads)
         continue;
     end
 
-    tau_ads = sort(tau_ads(:));
-    N = numel(tau_ads);
+    if UseRelativeTime
+        t50 = median(tau_ads);
+        if ~(isfinite(t50) && t50 > 0)
+            continue;
+        end
+        tau_ads = tau_ads / t50;
+    end
 
-    % CCDF: P(T > t)
-    ccdf_y = (N:-1:1)' / N;
+    lo = quantile(tau_ads, qLow);
+    hi = quantile(tau_ads, qHigh);
 
-    h = plot(ax, tau_ads, ccdf_y, '-', ...
+    if isfinite(lo) && isfinite(hi) && hi > lo && lo > 0
+        all_min(end+1) = lo; %#ok<AGROW>
+        all_max(end+1) = hi; %#ok<AGROW>
+    end
+end
+
+if isempty(all_min)
+    text(ax, 0.5, 0.5, 'No valid adsorption-time data', ...
+        'Units', 'normalized', ...
+        'HorizontalAlignment', 'center', ...
+        'FontSize', 14, ...
+        'Color', 'r');
+    return;
+end
+
+xMin = min(all_min);
+xMax = max(all_max);
+
+edges   = logspace(log10(xMin), log10(xMax), GridN + 1);
+centers = sqrt(edges(1:end-1) .* edges(2:end));
+widths  = diff(edges);
+
+min_pdf = inf;
+max_pdf = 0;
+
+for i = 1:numel(DistModes)
+    dist_key = matlab.lang.makeValidName(DistModes{i});
+    tau_ads = AdsPDFData.(dist_key).tau_ads;
+    tau_ads = tau_ads(isfinite(tau_ads) & tau_ads > 0);
+
+    if isempty(tau_ads)
+        continue;
+    end
+
+    if UseRelativeTime
+        t50 = median(tau_ads);
+        if ~(isfinite(t50) && t50 > 0)
+            continue;
+        end
+        tau_ads = tau_ads / t50;
+    end
+
+    counts = histcounts(tau_ads, edges);
+    if sum(counts) == 0
+        continue;
+    end
+
+    % true PDF
+    pdf = counts ./ (sum(counts) .* widths);
+
+    valid = isfinite(pdf) & (pdf > PDF_MinPositive);
+    if nnz(valid) < 3
+        continue;
+    end
+
+    min_pdf = min(min_pdf, min(pdf(valid)));
+    max_pdf = max(max_pdf, max(pdf(valid)));
+
+    idx_valid = find(valid);
+    if numel(idx_valid) > 12
+        idx_show = idx_valid(1:2:end);
+    else
+        idx_show = idx_valid;
+    end
+
+    local_centers = centers(valid);
+    local_pdf     = pdf(valid);
+
+    marker_idx = idx_show - idx_valid(1) + 1;
+    marker_idx = marker_idx(marker_idx >= 1 & marker_idx <= numel(local_centers));
+
+    plot(ax, local_centers, local_pdf, '-', ...
         'Color', Colors(i,:), ...
         'LineWidth', LineWidth_Base, ...
         'Marker', Markers{mod(i-1, numel(Markers))+1}, ...
+        'MarkerIndices', marker_idx, ...
         'MarkerSize', Marker_Size/10, ...
         'MarkerFaceColor', 'w', ...
         'MarkerEdgeColor', Colors(i,:));
-
-    Legend_Handles = [Legend_Handles, h]; %#ok<AGROW>
-    Legend_Labels{end+1} = strrep(DistModes{i}, '_', ' '); %#ok<AGROW>
 end
 
-legend(ax, Legend_Handles, Legend_Labels, 'Location', 'southwest', 'FontSize', 8, 'Box', 'off');
+if isfinite(min_pdf) && max_pdf > 0
+    ylim(ax, [max(PDF_MinPositive, min_pdf/2), max_pdf*2]);
 end
 
-%% =========================================================================
+xlim(ax, [xMin, xMax]);
+
+end
+
+%% ========================================================================
 function apply_axis_decor(ax, global_zero_mapped_val, isPhi0)
 
 drawnow;
 xticks_val = ax.XTick;
+
 if ~ismember(global_zero_mapped_val, xticks_val)
     xticks_val = sort([global_zero_mapped_val, xticks_val]);
 end
 ax.XTick = xticks_val;
 
-xticklabels_str = cell(1, length(xticks_val));
-for k = 1:length(xticks_val)
+xticklabels_str = cell(1, numel(xticks_val));
+for k = 1:numel(xticks_val)
     if xticks_val(k) <= global_zero_mapped_val * 1.1
         xticklabels_str{k} = '0';
     else
@@ -499,9 +636,10 @@ else
     ax.YLim = [-0.2, 1.05];
     ax.YTick = -0.2:0.2:1.0;
 end
+
 end
 
-%% =========================================================================
+%% ========================================================================
 function save_one_figure(fig_handle, saveDir, figName)
 
 safeFigName = regexprep(figName, '\s*\(.*?\)', '');
@@ -510,19 +648,22 @@ safeFigName = regexprep(safeFigName, '[\\/:*?"<>|()]', '');
 
 savefig(fig_handle, fullfile(saveDir, [safeFigName, '.fig']));
 try
-    exportgraphics(fig_handle, fullfile(saveDir, [safeFigName, '.jpg']), 'Resolution', 300);
+    exportgraphics(fig_handle, fullfile(saveDir, [safeFigName, '.jpg']), 'Resolution', 600);
+    exportgraphics(fig_handle, fullfile(saveDir, [safeFigName, '.pdf']), 'ContentType', 'vector');
 catch
-    print(fig_handle, fullfile(saveDir, [safeFigName, '.jpg']), '-djpeg', '-r300');
-end
+    print(fig_handle, fullfile(saveDir, [safeFigName, '.jpg']), '-djpeg', '-r600');
 end
 
-%% =========================================================================
+end
+
+%% ========================================================================
 function save_axis_as_figure(ax_src, saveDir, figName)
 
-fig_tmp = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 900 600]);
+fig_tmp = figure('Visible', 'off', 'Color', 'w', 'Position', [100 100 1100 800]);
 ax_new = copyobj(ax_src, fig_tmp);
 set(ax_new, 'Position', get(groot, 'defaultAxesPosition'));
 
 save_one_figure(fig_tmp, saveDir, figName);
 close(fig_tmp);
+
 end
