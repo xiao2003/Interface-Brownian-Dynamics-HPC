@@ -80,12 +80,6 @@ JumpingAtMolecularFreq
 build_linkedcell_mex
 ```
 
-旧版静态哈希路径对应的编译脚本为：
-
-```matlab
-Do_Compile_HPC
-```
-
 仓库中提交的 `.mexw64` 文件仅适用于 Windows。若迁移到 Linux 或 macOS，需要重新编译。
 
 ---
@@ -97,11 +91,9 @@ Do_Compile_HPC
 |-- 01_Main/
 |   `-- JumpingAtMolecularFreq.m
 |-- 02_Simulation_Engine/
-|   |-- Sub_JumpingBetweenEachFrame.m
 |   |-- Sub_JumpingBetweenEachFrame_LinkedCell.m
 |   |-- Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64
-|   |-- Sub_JumpingBetweenEachFrame_mex.m
-|   `-- Sub_JumpingBetweenEachFrame_mex_mex.mexw64
+|   `-- ...
 |-- 03_Distributions/
 |   |-- Sub_GenerateExponentialWithMean.m
 |   |-- Sub_GeneratePowerLawWithMean.m
@@ -120,11 +112,8 @@ Do_Compile_HPC
 |   `-- track.m
 |-- 05_Utils_and_Tests/
 |   |-- build_linkedcell_mex.m
-|   |-- Do_Compile_HPC.m
 |   |-- Verify_Figure6.m
 |   `-- killall.m
-|-- Archive_Deprecated/
-|   `-- .gitkeep
 |-- assets/
 |   `-- architecture-overview.png
 |-- .gitignore
@@ -155,10 +144,6 @@ Do_Compile_HPC
   当前主链路入口。
 - `Sub_JumpingBetweenEachFrame_LinkedCell_mex.mexw64`
   当前主链路对应的 MEX。
-- `Sub_JumpingBetweenEachFrame_mex.m`
-  较早期静态哈希版本。
-- `Sub_JumpingBetweenEachFrame_mex_mex.mexw64`
-  旧版本的 MEX。
 
 ### 03_Distributions
 
@@ -204,8 +189,6 @@ Do_Compile_HPC
 
 - `build_linkedcell_mex.m`
   当前主链路编译脚本。
-- `Do_Compile_HPC.m`
-  旧路径编译脚本。
 - `Verify_Figure6.m`
   标度关系验证脚本。
 - `killall.m`
@@ -366,7 +349,6 @@ min_d_sq < adR^2
 
 - 当前默认针对二维异质界面中的单分子输运问题；
 - 当前最成熟的运行路径为 Windows + MATLAB + `.mexw64`；
-- 旧版静态哈希路径保留用于对照，不是默认主线；
 - 运行时会生成临时 `SharedHash_*.bin` 文件，程序中包含对应清理逻辑；
 - 部分历史 MATLAB 注释存在编码遗留，但不影响当前主链路逻辑。
 
